@@ -1,0 +1,21 @@
+BINDIR=bin
+SRCDIR=clox/src
+OBJDIR=obj
+CFLAGS=-Iclox/include
+CC=gcc
+SOURCES=$(wildcard $(SRCDIR)/*.c)
+OBJECTS=$(SOURCES:$(SRCDIR)/%.c=$(OBJDIR)/%.o)
+TARGET=$(BINDIR)/clox
+
+all: $(TARGET)
+
+$(TARGET): $(OBJECTS)
+	if	not	exist	"$(BINDIR)"	mkdir  $(BINDIR)
+	$(CC) $^ -o $@
+
+$(OBJDIR)/%.o: $(SRCDIR)/%.c
+	if	not	exist	"$(OBJDIR)"	mkdir  $(OBJDIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+clean:
+	rm -rf $(OBJDIR) $(BINDIR)
