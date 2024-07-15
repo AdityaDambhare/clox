@@ -9,7 +9,10 @@ void dissassembleChunk(Chunk* chunk, const char* name) {
     offset = dissassembleInstruction(chunk, offset);
   }
 }
-
+static int simpleInstruction(const char* name,int offset){
+  printf("%s\n",name);
+  return offset+1;
+}
 int dissassembleInstruction(Chunk* chunk, int offset) {
   printf("%04d ", offset);
   int line = getLine(chunk, offset);
@@ -18,7 +21,7 @@ int dissassembleInstruction(Chunk* chunk, int offset) {
   } else {
     printf("%4d ", line);
   }
-  static void* dispatchTable[3] = {&&RETURN,&&CONSTANT,&&CONSTANT_LONG};
+  static void* dispatchTable[8] = {&&RETURN,&&CONSTANT,&&CONSTANT_LONG,&&ADD,&&SUBTRACT,&&MULTIPLY,&&DIVIDE,&&NEGATE};
   uint8_t instruction = chunk->code[offset];
   if (instruction >= 0 && instruction < sizeof(dispatchTable) / sizeof(dispatchTable[0])) {
     goto *dispatchTable[instruction];
@@ -27,8 +30,7 @@ int dissassembleInstruction(Chunk* chunk, int offset) {
     return offset + 1; // Or some error handling
   }
   RETURN:
-    printf("OP_RETURN\n");
-    return offset + 1;
+    return simpleInstruction("OP_RETURN",offset);
   CONSTANT:
     printf("%-16s %4d '", "OP_CONSTANT", instruction);
     instruction = chunk->code[offset+1];
@@ -43,4 +45,14 @@ int dissassembleInstruction(Chunk* chunk, int offset) {
     printValue(chunk->constants.values[combined]);
     printf("'\n");
     return offset + 3;
+  ADD:
+    return simpleInstruction("OP_ADD",offset);
+  SUBTRACT:
+    return simpleInstruction("OP_SUBTRACT",offset);
+  MULTIPLY:
+    return simpleInstruction("OP_MULTIPLY",offset);
+  DIVIDE:
+    return simpleInstruction("OP_DIVIDE",offset);
+  NEGATE:
+    return simpleInstruction("OP_NEGATE",offset);
 }

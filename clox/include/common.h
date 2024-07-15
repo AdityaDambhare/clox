@@ -3,4 +3,5 @@
 #include  <stdbool.h> //for bool
 #include <stddef.h>  //for size_t
 #include <stdint.h> //for explicit integer types
+#define DEBUG_TRACE_EXECUTION
 #endif
