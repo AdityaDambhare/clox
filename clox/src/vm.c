@@ -60,7 +60,9 @@ static InterpretResult run() {
     dissassembleInstruction(vm.chunk,(int)(vm.ip-vm.chunk->code-1));
 #endif
 
-
+    if(instruction>7){
+        return INTERPRET_RUNTIME_ERROR;
+    }
     DISPATCH();
     RETURN:
         printValue(pop());
@@ -95,6 +97,14 @@ static InterpretResult run() {
 }
 
 InterpretResult interpret(const char* source){
-    compile(source);
-    return INTERPRET_OK;
+    Chunk chunk;
+    initChunk(&chunk);
+    if(!compile(source,&chunk)){
+        freeChunk(&chunk);
+        return INTERPRET_COMPILE_ERROR;
+    }
+    vm.chunk = &chunk;
+    vm.ip = vm.chunk->code;
+    InterpretResult result = run();
+    return result;
 }
