@@ -21,7 +21,7 @@ int dissassembleInstruction(Chunk* chunk, int offset) {
   } else {
     printf("%4d ", line);
   }
-  static void* dispatchTable[8] = {&&RETURN,&&CONSTANT,&&CONSTANT_LONG,&&ADD,&&SUBTRACT,&&MULTIPLY,&&DIVIDE,&&NEGATE};
+  static void* dispatchTable[9] = {&&RETURN,&&CONSTANT,&&CONSTANT_LONG,&&ADD,&&SUBTRACT,&&MULTIPLY,&&DIVIDE,&&NEGATE,&&POP};
   uint8_t instruction = chunk->code[offset];
   if (instruction >= 0 && instruction < sizeof(dispatchTable) / sizeof(dispatchTable[0])) {
     goto *dispatchTable[instruction];
@@ -55,4 +55,6 @@ int dissassembleInstruction(Chunk* chunk, int offset) {
     return simpleInstruction("OP_DIVIDE",offset);
   NEGATE:
     return simpleInstruction("OP_NEGATE",offset);
+  POP:
+    return simpleInstruction("OP_POP",offset);
 }

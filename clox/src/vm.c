@@ -43,7 +43,7 @@ static InterpretResult run() {
     while(0)\
 
     uint8_t instruction;
-    static void* dispatch_table[8] = {&&RETURN,&&CONSTANT,&&CONSTANT_LONG,&&ADD,&&SUBTRACT,&&MULTIPLY,&&DIVIDE,&&NEGATE};
+    static void* dispatch_table[9] = {&&RETURN,&&CONSTANT,&&CONSTANT_LONG,&&ADD,&&SUBTRACT,&&MULTIPLY,&&DIVIDE,&&NEGATE,&&POP};
     JUMP:
     instruction = READ_BYTE();
 
@@ -60,7 +60,7 @@ static InterpretResult run() {
     dissassembleInstruction(vm.chunk,(int)(vm.ip-vm.chunk->code-1));
 #endif
 
-    if(instruction>7){
+    if(instruction<0 || instruction>=sizeof(dispatch_table)/sizeof(dispatch_table[0])){
         return INTERPRET_RUNTIME_ERROR;
     }
     DISPATCH();
@@ -89,7 +89,8 @@ static InterpretResult run() {
         BINARY_OP(/);goto JUMP;
     NEGATE:
         push(-pop());goto JUMP;
-
+    POP:
+        pop();goto JUMP;
 #undef BINARY_OP        
 #undef READ_CONSTANT
 #undef DISPATCH

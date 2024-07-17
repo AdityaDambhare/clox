@@ -17,6 +17,7 @@ typedef struct{
 typedef enum{
 PREC_NONE,
 PREC_ASSIGNMENT,  //=
+PREC_COMMA,       //,
 PREC_OR,          // or
 PREC_AND,         // and
 PREC_EQUALITY,    // == !=
@@ -106,6 +107,7 @@ static void endCompiler(){
 }
 
 static void expression();
+static void comma();
 static ParseRule* getRule(TokenType type);
 static void parsePrecedence(Precedence precedence);
 
@@ -146,13 +148,15 @@ ParseRule rules[] = {
   [TOKEN_RIGHT_PAREN]   = {NULL,     NULL,   PREC_NONE},
   [TOKEN_LEFT_BRACE]    = {NULL,     NULL,   PREC_NONE}, 
   [TOKEN_RIGHT_BRACE]   = {NULL,     NULL,   PREC_NONE},
-  [TOKEN_COMMA]         = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_COMMA]         = {NULL,     comma,   PREC_COMMA},
   [TOKEN_DOT]           = {NULL,     NULL,   PREC_NONE},
   [TOKEN_MINUS]         = {unary,    binary, PREC_TERM},
   [TOKEN_PLUS]          = {NULL,     binary, PREC_TERM},
   [TOKEN_SEMICOLON]     = {NULL,     NULL,   PREC_NONE},
   [TOKEN_SLASH]         = {NULL,     binary, PREC_FACTOR},
   [TOKEN_STAR]          = {NULL,     binary, PREC_FACTOR},
+  [TOKEN_COLON]         = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_QUESTION]      = {NULL,     NULL,   PREC_NONE},
   [TOKEN_BANG]          = {NULL,     NULL,   PREC_NONE},
   [TOKEN_BANG_EQUAL]    = {NULL,     NULL,   PREC_NONE},
   [TOKEN_EQUAL]         = {NULL,     NULL,   PREC_NONE},
@@ -206,6 +210,10 @@ static ParseRule* getRule(TokenType type){
 
 static void expression(){
     parsePrecedence(PREC_ASSIGNMENT);
+}
+static void comma(){
+    emitByte(OP_POP);
+    parsePrecedence(PREC_COMMA);
 }
 bool compile(const char* source,Chunk* chunk){
     initScanner(source);
