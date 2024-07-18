@@ -46,7 +46,7 @@ static char* readFile(const char* path) {
 
 static void runFile(const char* path) {
   char* source = readFile(path);
-#ifdef DUMP_FILE_OUTPUT
+#ifdef DUMP_PROGRAM_OUTPUT
   freopen("output.txt","w",stdout);
 #endif
   InterpretResult result = interpret(source);
