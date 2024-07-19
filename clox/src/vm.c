@@ -1,9 +1,12 @@
 #include <stdio.h>
 #include <stdarg.h>
+#include <string.h>
 #include "common.h"
 #include "debug.h"
 #include "vm.h"
 #include "compiler.h"
+#include "object.h"
+#include "memory.h"
 VM vm;
 
 static void resetStack(){
@@ -25,10 +28,11 @@ static void runtimeError(const char* format, ...) {
 
 void initVM(){
     resetStack();
+    vm.objects = NULL;
 }
 
 void freeVM(){
-
+    freeObjects();
 }   
 
 
@@ -49,6 +53,45 @@ static Value peek(int distance) {
 
 static bool isFalsey(Value value) {
   return IS_NIL(value) || (IS_BOOL(value) && !AS_BOOL(value));
+}
+
+ObjString* value_to_string(Value value, int precision) {
+    int needed_size;
+    char *result;
+
+    // Use snprintf to determine the required buffer size
+    needed_size = snprintf(NULL, 0, "%.*g", precision, (double)AS_NUMBER(value));
+
+    // Check for errors or insufficient space allocation
+    if (needed_size <= 0) {
+        return NULL; // Handle error or insufficient space
+    }
+
+    // Allocate memory for the string (including null terminator)
+    result = ALLOCATE(char,needed_size + 1);
+    if (result == NULL) {
+        return NULL; // Handle memory allocation failure
+    }
+
+    // Convert the double to the string with the specified precision
+    snprintf(result, needed_size + 1, "%.*g", precision, (double)AS_NUMBER(value));
+    
+    return takeString(result, needed_size);
+}
+
+static void concatenate() {
+  Value b_val =  pop();
+  Value a_val =  pop();
+  ObjString* a = IS_NUMBER(a_val)?value_to_string(a_val,10):AS_STRING(a_val);
+  ObjString* b = IS_NUMBER(b_val)?value_to_string(b_val,10):AS_STRING(b_val);
+  int length = a->length + b->length;
+  char* chars = ALLOCATE(char, length + 1);
+  memcpy(chars, a->chars, a->length);
+  memcpy(chars + a->length, b->chars, b->length);
+  chars[length] = '\0';
+
+  ObjString* result = takeString(chars, length);
+  push(OBJ_VAL(result));
 }
 
 static InterpretResult run() {
@@ -123,7 +166,24 @@ static InterpretResult run() {
         push(constant);
         goto JUMP;    
     ADD:
-        BINARY_OP(NUMBER_VAL,+);goto JUMP;
+        {
+        if ((IS_STRING(peek(0)) && IS_NUMBER(peek(1)))
+        || (IS_NUMBER(peek(0)) && IS_STRING(peek(1)))
+        || (IS_STRING(peek(0)) && IS_STRING(peek(1)))
+        ) {
+          concatenate();
+        } else if (IS_NUMBER(peek(0)) && IS_NUMBER(peek(1))) {
+          double b = AS_NUMBER(pop());
+          double a = AS_NUMBER(pop());
+          push(NUMBER_VAL(a + b));
+        } 
+        else {
+          runtimeError(
+              "Operands must be two numbers or two strings.");
+          return INTERPRET_RUNTIME_ERROR;
+        }
+        goto JUMP;
+      }
     SUBTRACT:
         BINARY_OP(NUMBER_VAL,-);goto JUMP;
     MULTIPLY:
