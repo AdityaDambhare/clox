@@ -18,7 +18,14 @@ typedef enum {
   OP_DIVIDE,
   OP_NOT,
   OP_NEGATE,
-  OP_POP
+  OP_POP,
+  OP_PRINT,
+  OP_DEFINE_GLOBAL,
+  OP_DEFINE_GLOBAL_LONG,
+  OP_GET_GLOBAL,
+  OP_GET_GLOBAL_LONG,
+  OP_SET_GLOBAL,
+  OP_SET_GLOBAL_LONG,
 } OpCode;
 
 typedef struct{

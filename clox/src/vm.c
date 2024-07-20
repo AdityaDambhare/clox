@@ -30,11 +30,13 @@ void initVM(){
     resetStack();
     vm.objects = NULL;
     initTable(&vm.strings);
+    initTable(&vm.globals);
 }
 
 void freeVM(){
     freeObjects();
     freeTable(&vm.strings);
+    freeTable(&vm.globals);
 }   
 
 
@@ -113,7 +115,31 @@ static InterpretResult run() {
     while(0)\
 
     uint8_t instruction;
-    static void* dispatch_table[] = {&&RETURN,&&CONSTANT,&&NIL,&&TRUE,&&FALSE,&&EQUAL,&&GREATER,&&LESS,&&CONSTANT_LONG,&&ADD,&&SUBTRACT,&&MULTIPLY,&&DIVIDE,&&NOT,&&NEGATE,&&POP};
+static void* dispatch_table[] = 
+  {&&RETURN,
+  &&CONSTANT,
+  &&NIL,
+  &&TRUE,
+  &&FALSE,
+  &&EQUAL,
+  &&GREATER,
+  &&LESS,
+  &&CONSTANT_LONG,
+  &&ADD,
+  &&SUBTRACT,
+  &&MULTIPLY,
+  &&DIVIDE,
+  &&NOT,
+  &&NEGATE,
+  &&POP,
+  &&PRINT,
+  &&DEFINE_GLOBAL,
+  &&DEFINE_GLOBAL_LONG,
+  &&GET_GLOBAL,
+  &&GET_GLOBAL_LONG,
+  &&SET_GLOBAL,
+  &&SET_GLOBAL_LONG,
+  };
     JUMP:
     instruction = READ_BYTE();
 
@@ -135,8 +161,6 @@ static InterpretResult run() {
     }
     DISPATCH();
     RETURN:
-        printValue(pop());
-        printf("\n");
         return INTERPRET_OK;
     CONSTANT:
         Value constant = READ_CONSTANT();
@@ -202,6 +226,76 @@ static InterpretResult run() {
         push(NUMBER_VAL(AS_NUMBER(pop())));goto JUMP;
     POP:
         pop();goto JUMP;
+    PRINT:
+        printValue(pop());
+        printf("\n");
+        goto JUMP;
+    DEFINE_GLOBAL:
+        {
+            ObjString* name = AS_STRING(READ_CONSTANT());
+            tableSet(&vm.globals,name,peek(0));
+            pop();
+            goto JUMP;
+        }
+    DEFINE_GLOBAL_LONG:
+        {
+            uint8_t high_byte = READ_BYTE();
+            uint8_t low_byte = READ_BYTE();
+            uint16_t combined = (high_byte<<8)|low_byte;
+            ObjString* name = AS_STRING(vm.chunk->constants.values[combined]);
+            tableSet(&vm.globals,name,peek(0));
+            pop();
+            goto JUMP;
+        }
+    GET_GLOBAL:
+        {
+            ObjString* name = AS_STRING(READ_CONSTANT());
+            Value value;
+            if(!tableGet(&vm.globals,name,&value)){
+                runtimeError("Undefined variable '%s'.",name->chars);
+                return INTERPRET_RUNTIME_ERROR;
+            }
+            push(value);
+            goto JUMP;
+        }
+    GET_GLOBAL_LONG:
+        {
+            uint8_t high_byte = READ_BYTE();
+            uint8_t low_byte = READ_BYTE();
+            uint16_t combined = (high_byte<<8)|low_byte;
+            ObjString* name = AS_STRING(vm.chunk->constants.values[combined]);
+            Value value;
+            if(!tableGet(&vm.globals,name,&value)){
+                runtimeError("Undefined variable '%s'.",name->chars);
+                return INTERPRET_RUNTIME_ERROR;
+            }
+            push(value);
+            goto JUMP;
+        }
+    SET_GLOBAL:
+        {
+            ObjString* name = AS_STRING(READ_CONSTANT());
+            if(tableSet(&vm.globals,name,peek(0))){//tableSet returns true is the key is new
+                tableDelete(&vm.globals,name);
+                runtimeError("Undefined variable '%s'.",name->chars);//in that case the variable must be undefined
+                return INTERPRET_RUNTIME_ERROR;
+            }
+            goto JUMP;
+        }
+    SET_GLOBAL_LONG:
+        {
+            uint8_t high_byte = READ_BYTE();
+            uint8_t low_byte = READ_BYTE();
+            uint16_t combined = (high_byte<<8)|low_byte;
+            ObjString* name = AS_STRING(vm.chunk->constants.values[combined]);
+            if(tableSet(&vm.globals,name,peek(0))){
+                tableDelete(&vm.globals,name);
+                runtimeError("Undefined variable '%s'.",name->chars);
+                return INTERPRET_RUNTIME_ERROR;
+            }
+            goto JUMP;
+        
+        }
 #undef BINARY_OP        
 #undef READ_CONSTANT
 #undef DISPATCH
