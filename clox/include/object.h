@@ -20,6 +20,7 @@ struct ObjString{
     Obj obj;
     int length;
     char* chars;
+    uint32_t hash;//precalculated for every string 
 };  
 ObjString* takeString(char* chars, int length);
 ObjString* copyString(const char* chars, int length);   

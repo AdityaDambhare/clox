@@ -3,13 +3,14 @@
 #define STACK_MAX 1024
 #include "chunk.h"
 #include "value.h"
-
+#include "table.h"
 typedef struct{
     Chunk* chunk;
     uint8_t* ip;
     Value stack[STACK_MAX];
     Value* stackTop;
     Obj* objects;
+    Table strings;
 }VM;
 
 typedef enum{
