@@ -34,7 +34,11 @@ void printValue(Value value){
         printf("nil");
         break;
     case VAL_NUMBER:
-        printf("%g",AS_NUMBER(value));
+        if (AS_NUMBER(value) < 0) {
+            printf("-%g", -AS_NUMBER(value));
+        } else {
+            printf("%g", AS_NUMBER(value));
+        }
         break;
     case VAL_OBJ:
         printObject(value);

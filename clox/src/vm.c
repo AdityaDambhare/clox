@@ -142,7 +142,10 @@ static void* dispatch_table[] =
   &&SET_GLOBAL,
   &&SET_GLOBAL_LONG,
   &&GET_LOCAL,
-  &&SET_LOCAL
+  &&SET_LOCAL,
+  &&JUMPOP,
+  &&JUMP_IF_FALSE,
+  &&LOOP
   };
     JUMP:
     instruction = READ_BYTE();
@@ -171,6 +174,7 @@ static void* dispatch_table[] =
         push(constant);
         goto JUMP;
     NIL:
+
         push(NIL_VAL);
         goto JUMP;
     TRUE:
@@ -227,7 +231,9 @@ static void* dispatch_table[] =
             runtimeError("Operand must be a number.");
             return INTERPRET_RUNTIME_ERROR;
         }
-        push(NUMBER_VAL(AS_NUMBER(pop())));goto JUMP;
+        Value value = pop();
+        push(NUMBER_VAL(-AS_NUMBER(value)));
+        goto JUMP;
     POWER:
         {
             if(!IS_NUMBER(peek(0)) || !IS_NUMBER(peek(1))){
@@ -325,6 +331,32 @@ static void* dispatch_table[] =
             uint8_t low_byte = READ_BYTE();
             uint16_t combined = (high_byte<<8)|low_byte;
             vm.stack[combined] = peek(0);
+            goto JUMP;
+        }
+    JUMPOP:
+        {
+            uint8_t high_byte = READ_BYTE();
+            uint8_t low_byte = READ_BYTE();
+            uint16_t combined = (high_byte<<8)|low_byte;
+            vm.ip += combined;
+            goto JUMP;
+        }
+    JUMP_IF_FALSE:
+        {
+            uint8_t high_byte = READ_BYTE();
+            uint8_t low_byte = READ_BYTE();
+            uint16_t combined = (high_byte<<8)|low_byte;
+            if(isFalsey(peek(0))){
+                vm.ip += combined;
+            }
+            goto JUMP;
+        }
+    LOOP:
+        {
+            uint8_t high_byte = READ_BYTE();
+            uint8_t low_byte = READ_BYTE();
+            uint16_t combined = (high_byte<<8)|low_byte;
+            vm.ip -= combined;
             goto JUMP;
         }
 #undef BINARY_OP        

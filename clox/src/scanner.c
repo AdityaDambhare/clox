@@ -79,6 +79,9 @@ static void skipWhitespace(){
                     while(peek()!='\n' && !isAtEnd()){
                         advance();
                     }
+                    if(peek()=='\n'){
+                        scanner.line++;
+                    }
                 }
                 else{
                     return;
