@@ -25,7 +25,12 @@ static int constantIntsructionLong(const char* name,Chunk* chunk,int offset){
   uint8_t low_byte = chunk->code[offset+2];
   uint16_t combined = (high_byte<<8)|low_byte;
   printf("%-16s %4d '",name,combined);
+  if(combined<chunk->constants.count){
   printValue(chunk->constants.values[combined]);
+  }
+  else{
+    printValue(NIL_VAL);
+  }
   printf("'\n");
   return offset+3;
 }
@@ -54,6 +59,7 @@ int dissassembleInstruction(Chunk* chunk, int offset) {
   &&DIVIDE,
   &&NOT,
   &&NEGATE,
+  &&POWER,
   &&POP,
   &&PRINT,
   &&DEFINE_GLOBAL,
@@ -62,6 +68,8 @@ int dissassembleInstruction(Chunk* chunk, int offset) {
   &&GET_GLOBAL_LONG,
   &&SET_GLOBAL,
   &&SET_GLOBAL_LONG,
+  &&GET_LOCAL,
+  &&SET_LOCAL
   };
 
   uint8_t instruction = chunk->code[offset];
@@ -101,6 +109,8 @@ int dissassembleInstruction(Chunk* chunk, int offset) {
     return simpleInstruction("OP_NOT",offset);
   NEGATE:
     return simpleInstruction("OP_NEGATE",offset);
+  POWER:
+    return simpleInstruction("OP_POWER",offset);
   POP:
     return simpleInstruction("OP_POP",offset);
   PRINT:
@@ -117,4 +127,8 @@ int dissassembleInstruction(Chunk* chunk, int offset) {
     return constantInstruction("OP_SET_GLOBAL",chunk,offset);
   SET_GLOBAL_LONG:
     return constantIntsructionLong("OP_SET_GLOBAL_LONG",chunk,offset);
+  GET_LOCAL:
+    return constantIntsructionLong("OP_GET_LOCAL",chunk,offset);
+  SET_LOCAL:
+    return constantIntsructionLong("OP_SET_LOCAL",chunk,offset);
 }

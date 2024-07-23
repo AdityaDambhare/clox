@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
+#include <math.h>
 #include "common.h"
 #include "debug.h"
 #include "vm.h"
@@ -131,6 +132,7 @@ static void* dispatch_table[] =
   &&DIVIDE,
   &&NOT,
   &&NEGATE,
+  &&POWER,
   &&POP,
   &&PRINT,
   &&DEFINE_GLOBAL,
@@ -139,6 +141,8 @@ static void* dispatch_table[] =
   &&GET_GLOBAL_LONG,
   &&SET_GLOBAL,
   &&SET_GLOBAL_LONG,
+  &&GET_LOCAL,
+  &&SET_LOCAL
   };
     JUMP:
     instruction = READ_BYTE();
@@ -224,6 +228,17 @@ static void* dispatch_table[] =
             return INTERPRET_RUNTIME_ERROR;
         }
         push(NUMBER_VAL(AS_NUMBER(pop())));goto JUMP;
+    POWER:
+        {
+            if(!IS_NUMBER(peek(0)) || !IS_NUMBER(peek(1))){
+                runtimeError("Operands must be numbers.");
+                return INTERPRET_RUNTIME_ERROR;
+            }
+            double b = AS_NUMBER(pop());
+            double a = AS_NUMBER(pop());
+            push(NUMBER_VAL(pow(a,b)));
+        }
+        goto JUMP;
     POP:
         pop();goto JUMP;
     PRINT:
@@ -295,6 +310,22 @@ static void* dispatch_table[] =
             }
             goto JUMP;
         
+        }
+    GET_LOCAL:
+        {
+            uint8_t high_byte = READ_BYTE();
+            uint8_t low_byte = READ_BYTE();
+            uint16_t combined = (high_byte<<8)|low_byte;
+            push(vm.stack[combined]);
+            goto JUMP;
+        }
+    SET_LOCAL:
+        {
+            uint8_t high_byte = READ_BYTE();
+            uint8_t low_byte = READ_BYTE();
+            uint16_t combined = (high_byte<<8)|low_byte;
+            vm.stack[combined] = peek(0);
+            goto JUMP;
         }
 #undef BINARY_OP        
 #undef READ_CONSTANT

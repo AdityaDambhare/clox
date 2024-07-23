@@ -1,6 +1,6 @@
 #ifndef CLOX_VM_H
 #define CLOX_VM_H
-#define STACK_MAX 1024
+#define STACK_MAX UINT16_MAX
 #include "chunk.h"
 #include "value.h"
 #include "table.h"
