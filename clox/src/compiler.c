@@ -19,8 +19,9 @@ typedef struct{
 
 typedef enum{
 PREC_NONE,
-PREC_ASSIGNMENT,  //=
 PREC_COMMA,       //,
+PREC_ASSIGNMENT,  //=
+PREC_TERNARY,     //?:
 PREC_OR,          // or
 PREC_AND,         // and
 PREC_EQUALITY,    // == !=
@@ -58,6 +59,9 @@ static Compiler current;
 static Chunk* currentChunk(){
     return compilingChunk;
 }
+
+static int currentLoopStart = -1;
+static int currentLoopScope = 0;
 
 static void errorAt(Token* token,const char* message){
     if(parser.panicMode) return;
@@ -209,6 +213,19 @@ static void binary(bool canAssign){
         default:return;
     }
 }
+
+static void conditional(bool canAssign){
+    int elseJump = emitJump(OP_JUMP_IF_FALSE);
+    emitByte(OP_POP);
+    parsePrecedence(PREC_TERNARY);
+    consume(TOKEN_COLON,"Expect ':' after ?: expression.");
+    int endJump = emitJump(OP_JUMP);
+    patchJump(elseJump);
+    emitByte(OP_POP);
+    parsePrecedence(PREC_TERNARY);
+    patchJump(endJump);
+}
+
 static void literal(bool canAssign) {
   switch (parser.previous.type) {
     case TOKEN_FALSE: emitByte(OP_FALSE); break;
@@ -279,7 +296,7 @@ static void namedVariable(Token token,bool canAssign){
     }
     return;
     SET:
-    expression();
+    parsePrecedence(PREC_ASSIGNMENT);
     if(arg<256){
         emitBytes(OP_SET_GLOBAL,(uint8_t)arg);
     }
@@ -316,7 +333,7 @@ ParseRule rules[] = {
   [TOKEN_STAR]          = {NULL,     binary, PREC_FACTOR},
   [TOKEN_POWER]         = {NULL,     binary, PREC_POWER},
   [TOKEN_COLON]         = {NULL,     NULL,   PREC_NONE},
-  [TOKEN_QUESTION]      = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_QUESTION]      = {NULL,     conditional,   PREC_TERNARY},
   [TOKEN_BANG]          = {unary,     NULL,   PREC_NONE},
   [TOKEN_BANG_EQUAL]    = {NULL,     binary,   PREC_EQUALITY},
   [TOKEN_EQUAL]         = {NULL,     NULL,   PREC_NONE},
@@ -445,7 +462,7 @@ static ParseRule* getRule(TokenType type){
 }
 
 static void expression(){
-    parsePrecedence(PREC_ASSIGNMENT);
+    parsePrecedence(PREC_COMMA);
 }
 static void block(){
     while(!check(TOKEN_RIGHT_BRACE)&&!check(TOKEN_EOF)){
@@ -457,12 +474,11 @@ static void varDeclaration() {
   int global = parseVariable("Expect variable name.");
 
   if (match(TOKEN_EQUAL)) {
-    expression();
+    parsePrecedence(PREC_ASSIGNMENT);
   } else {
     emitByte(OP_NIL);
   }
-  consume(TOKEN_SEMICOLON,
-          "Expect ';' after variable declaration.");
+  consume(TOKEN_SEMICOLON,"Expect ';' after variable declaration.");
 
   defineVariable(global);
 }
@@ -489,6 +505,7 @@ static void if_statement(){
 }
 
 static void whileStatement(){
+   
     int loopStart = currentChunk()->count;
     consume(TOKEN_LEFT_PAREN,"Expect '(' after 'while'.");
     expression();
@@ -502,6 +519,7 @@ static void whileStatement(){
 }
 
 static void forStatement(){
+  
     beginScope();
     consume(TOKEN_LEFT_PAREN,"Expect '(' after 'for'.");
     if(match(TOKEN_SEMICOLON)){
