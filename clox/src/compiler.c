@@ -62,6 +62,7 @@ static Chunk* currentChunk(){
 
 static int currentLoopStart = -1;
 static int currentLoopScope = 0;
+static int currentExitJump = -1;
 
 static void errorAt(Token* token,const char* message){
     if(parser.panicMode) return;
@@ -505,17 +506,20 @@ static void if_statement(){
 }
 
 static void whileStatement(){
-   
-    int loopStart = currentChunk()->count;
+    int sorroundingLoopStart = currentLoopStart;
+    int sorroundingexitJump = currentExitJump;
+    currentLoopStart = currentChunk()->count;
     consume(TOKEN_LEFT_PAREN,"Expect '(' after 'while'.");
     expression();
     consume(TOKEN_RIGHT_PAREN,"Expect ')' after condition.");
-    int exitJump = emitJump(OP_JUMP_IF_FALSE);
+    currentExitJump = emitJump(OP_JUMP_IF_FALSE);
     emitByte(OP_POP);
     statement();
-    emitLoop(loopStart);
-    patchJump(exitJump);
+    emitLoop(currentLoopStart);
+    patchJump(currentExitJump);
     emitByte(OP_POP);
+    currentExitJump = sorroundingexitJump;
+    currentLoopStart = sorroundingLoopStart;
 }
 
 static void forStatement(){
@@ -531,32 +535,71 @@ static void forStatement(){
     else{
         expressionStatement();
     }
-    int loopStart = currentChunk()->count;
-    int exitJump = -1;
+    int sorroundingLoopStart = currentLoopStart;
+    int sorroundingLoopScope = currentLoopScope;
+    int sorroundingExitJump = currentExitJump;
+    currentLoopStart = currentChunk()->count;
+    currentLoopScope = current.scopeDepth;
     if(!match(TOKEN_SEMICOLON)){
         expression();
         consume(TOKEN_SEMICOLON,"Expect ';' after loop condition.");
-        exitJump = emitJump(OP_JUMP_IF_FALSE);
+        currentExitJump = emitJump(OP_JUMP_IF_FALSE);
         emitByte(OP_POP);
     }
-
+    else{
+        emitByte(OP_TRUE);
+        currentExitJump = emitJump(OP_JUMP_IF_FALSE);
+    }
     if (!match(TOKEN_RIGHT_PAREN)){
         int bodyJump = emitJump(OP_JUMP);
         int incrementStart = currentChunk()->count;
         expression();
         emitByte(OP_POP);
         consume(TOKEN_RIGHT_PAREN, "Expect ')' after for clauses.");
-        emitLoop(loopStart);
-        loopStart = incrementStart;
+        emitLoop(currentLoopStart);
+        currentLoopStart = incrementStart;
         patchJump(bodyJump);
     }
     statement();
-    emitLoop(loopStart);
-    if(exitJump!=-1){
-        patchJump(exitJump);
+    emitLoop(currentLoopStart);
+
+    patchJump(currentExitJump);
+    emitByte(OP_POP);
+    currentExitJump = sorroundingExitJump;
+    currentLoopScope = sorroundingLoopScope;
+    currentLoopStart = sorroundingLoopStart;
+    endScope();
+}
+
+static void continueStatement(){
+    if(currentLoopStart == -1){
+        error("Can't use 'continue' outside of a loop.");
+    }
+
+    consume(TOKEN_SEMICOLON,"Expect ';' after 'continue'.");
+
+    for(int i = current.localCount-1;
+        i>=0 && current.locals[i].depth>currentLoopScope;
+        i--)
+    {
         emitByte(OP_POP);
     }
-    endScope();
+    emitLoop(currentLoopStart);
+}
+
+static void breakStatement(){
+    if(currentExitJump == -1){
+        error("Can't use 'break' outside of a loop.");
+    }
+    consume(TOKEN_SEMICOLON,"Expect ';' after 'break'.");
+    for(int i = current.localCount-1;
+        i>=0 && current.locals[i].depth>currentLoopScope;
+        i--)
+    {
+        emitByte(OP_POP);
+    }
+    emitByte(OP_FALSE);
+    emitLoop(currentExitJump-1);
 }
 
 static void printStatement(){
@@ -611,6 +654,12 @@ static void statement(){
         block();
         endScope();
     } 
+    else if (match(TOKEN_CONTINUE)){
+        continueStatement();
+    }
+    else if (match(TOKEN_BREAK)){
+        breakStatement();
+    }
     else{
         expressionStatement();
     }
