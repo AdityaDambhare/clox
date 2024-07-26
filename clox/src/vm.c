@@ -2,6 +2,7 @@
 #include <stdarg.h>
 #include <string.h>
 #include <math.h>
+#include <time.h>
 #include "common.h"
 #include "debug.h"
 #include "vm.h"
@@ -9,6 +10,10 @@
 #include "object.h"
 #include "memory.h"
 VM vm;
+
+static Value clockNative(int argCount, Value* args) {
+  return NUMBER_VAL((double)clock() / CLOCKS_PER_SEC);
+}
 
 static void resetStack(){
     vm.frameCount = 0;
@@ -36,11 +41,20 @@ static void runtimeError(const char* format, ...) {
   resetStack();
 }
 
+static void defineNative(const char* name, NativeFn function) {
+  push(OBJ_VAL(copyString(name, (int)strlen(name))));
+  push(OBJ_VAL(newNative(function)));
+  tableSet(&vm.globals, AS_STRING(vm.stack[0]), vm.stack[1]);
+  pop();
+  pop();
+}
+
 void initVM(){
     resetStack();
     vm.objects = NULL;
     initTable(&vm.strings);
     initTable(&vm.globals);
+    defineNative("clock", clockNative);
 }
 
 void freeVM(){
@@ -87,12 +101,19 @@ static bool callValue(Value callee, int argCount) {
     switch (OBJ_TYPE(callee)) {
       case OBJ_FUNCTION: 
         return call(AS_FUNCTION(callee), argCount);
+      case OBJ_NATIVE: {
+        NativeFn native = AS_NATIVE(callee);
+        Value result = native(argCount, vm.stackTop - argCount);
+        vm.stackTop -= argCount + 1;
+        push(result);
+        return true;
+      }
       default:
         break; // Non-callable object type.
-    }
   }
   runtimeError("Can only call functions and classes.");
   return false;
+}
 }
 
 static bool isFalsey(Value value) {
@@ -140,8 +161,8 @@ static void concatenate() {
 
 static InterpretResult run() {
   CallFrame* frame = &vm.frames[vm.frameCount - 1];
-
-#define READ_BYTE() (*frame->ip++)
+  register uint8_t* ip = frame->ip;
+#define READ_BYTE() (*ip++)
 #define READ_SHORT() \
     ((uint16_t)((READ_BYTE() << 8) | READ_BYTE()))
 
@@ -151,6 +172,7 @@ static InterpretResult run() {
 #define BINARY_OP(valueType,op)\
     do{\
     if(!IS_NUMBER(peek(0)) || !IS_NUMBER(peek(1))){\
+        frame->ip = ip;\
         runtimeError("Operands must be numbers.");\
         return INTERPRET_RUNTIME_ERROR;\
     }\
@@ -160,7 +182,7 @@ static InterpretResult run() {
     }\
     while(0)\
 
-    uint8_t instruction;
+    register uint8_t instruction;
 static void* dispatch_table[] = 
   {&&RETURN,
   &&CONSTANT,
@@ -210,9 +232,6 @@ static void* dispatch_table[] =
         (int)(frame->ip - frame->function->chunk.code-1));
 #endif
 
-    if(instruction<0 || instruction>=sizeof(dispatch_table)/sizeof(dispatch_table[0])){
-        return INTERPRET_RUNTIME_ERROR;
-    }
     DISPATCH();
     RETURN:
         {
@@ -225,6 +244,7 @@ static void* dispatch_table[] =
         vm.stackTop = frame->slots;
         push(result);
         frame = &vm.frames[vm.frameCount - 1];
+        ip = frame->ip;
         goto JUMP;
         }
     CONSTANT:{
@@ -271,6 +291,7 @@ static void* dispatch_table[] =
           push(NUMBER_VAL(a + b));
         } 
         else {
+            frame->ip = ip; 
           runtimeError(
               "Operands must be two numbers or two strings.");
           return INTERPRET_RUNTIME_ERROR;
@@ -287,6 +308,7 @@ static void* dispatch_table[] =
         push(BOOL_VAL(isFalsey(pop())));goto JUMP;
     NEGATE:{
         if(!IS_NUMBER(peek(0))){
+            frame->ip = ip;
             runtimeError("Operand must be a number.");
             return INTERPRET_RUNTIME_ERROR;
         }
@@ -297,6 +319,7 @@ static void* dispatch_table[] =
     POWER:
         {
             if(!IS_NUMBER(peek(0)) || !IS_NUMBER(peek(1))){
+                frame->ip = ip;
                 runtimeError("Operands must be numbers.");
                 return INTERPRET_RUNTIME_ERROR;
             }
@@ -331,6 +354,7 @@ static void* dispatch_table[] =
             ObjString* name = AS_STRING(READ_CONSTANT());
             Value value;
             if(!tableGet(&vm.globals,name,&value)){
+                frame->ip = ip;
                 runtimeError("Undefined variable '%s'.",name->chars);
                 return INTERPRET_RUNTIME_ERROR;
             }
@@ -353,6 +377,7 @@ static void* dispatch_table[] =
         {
             ObjString* name = AS_STRING(READ_CONSTANT());
             if(tableSet(&vm.globals,name,peek(0))){//tableSet returns true is the key is new
+                frame->ip = ip;
                 tableDelete(&vm.globals,name);
                 runtimeError("Undefined variable '%s'.",name->chars);//in that case the variable must be undefined
                 return INTERPRET_RUNTIME_ERROR;
@@ -386,7 +411,7 @@ static void* dispatch_table[] =
     JUMPOP:
         {
             uint16_t combined = READ_SHORT();
-            frame->ip += combined;
+            ip += combined;
             goto JUMP;
         }
     JUMP_IF_FALSE:
@@ -394,23 +419,25 @@ static void* dispatch_table[] =
 
             uint16_t combined = READ_SHORT();
             if(isFalsey(peek(0))){
-                frame->ip += combined;
+                ip += combined;
             }
             goto JUMP;
         }
     LOOP:
         {
             uint16_t combined = READ_SHORT();
-            frame->ip -= combined;
+            ip -= combined;
             goto JUMP;
         }
     CALL:
         {
         uint8_t argCount = READ_BYTE();
+        frame->ip = ip;
         if (!callValue(peek(argCount), argCount)) {
           return INTERPRET_RUNTIME_ERROR;
         }
         frame = &vm.frames[vm.frameCount - 1];
+        ip = frame->ip;
         }
         goto JUMP;
 #undef BINARY_OP        
