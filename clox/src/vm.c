@@ -227,9 +227,11 @@ static void* dispatch_table[] =
       printValue(*slot);
       printf(" ]");
     }
+    frame->ip = ip;
     printf("\n");
     dissassembleInstruction(&frame->function->chunk,
-        (int)(frame->ip - frame->function->chunk.code-1));
+        (int)(ip - frame->function->chunk.code-1));
+    ip = frame->ip;
 #endif
 
     DISPATCH();
@@ -274,7 +276,7 @@ static void* dispatch_table[] =
         BINARY_OP(BOOL_VAL,<);goto JUMP;
     CONSTANT_LONG:{
         uint16_t combined = READ_SHORT();
-        Value constant = vm.chunk->constants.values[combined];
+        Value constant = frame->function->chunk.constants.values[combined];
         push(constant);
     }
         goto JUMP;    
@@ -389,6 +391,7 @@ static void* dispatch_table[] =
             uint16_t combined = READ_SHORT();
             ObjString* name = AS_STRING(frame->function->chunk.constants.values[combined]);
             if(tableSet(&vm.globals,name,peek(0))){
+                frame->ip = ip;
                 tableDelete(&vm.globals,name);
                 runtimeError("Undefined variable '%s'.",name->chars);
                 return INTERPRET_RUNTIME_ERROR;
