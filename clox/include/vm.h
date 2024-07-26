@@ -1,12 +1,23 @@
 #ifndef CLOX_VM_H
 #define CLOX_VM_H
-#define STACK_MAX UINT16_MAX
+#define FRAMES_MAX 256
+#define STACK_MAX (FRAMES_MAX * UINT8_MAX)
 #include "chunk.h"
 #include "value.h"
 #include "table.h"
+#include "object.h"
+
+typedef struct {
+  ObjFunction* function;
+  uint8_t* ip;
+  Value* slots;
+} CallFrame;
+
 typedef struct{
     Chunk* chunk;
     uint8_t* ip;
+    CallFrame frames[FRAMES_MAX];
+    int frameCount;
     Value stack[STACK_MAX];
     Value* stackTop;
     Obj* objects;

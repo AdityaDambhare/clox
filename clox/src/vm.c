@@ -11,6 +11,7 @@
 VM vm;
 
 static void resetStack(){
+    vm.frameCount = 0;
     vm.stackTop = vm.stack;
 }
 
@@ -20,10 +21,18 @@ static void runtimeError(const char* format, ...) {
   vfprintf(stderr, format, args);
   va_end(args);
   fputs("\n", stderr);
-
-  size_t instruction = vm.ip - vm.chunk->code - 1;
-  int line = vm.chunk->lines[instruction].line;
-  fprintf(stderr, "[line %d] in script\n", line);
+   for (int i = vm.frameCount - 1; i >= 0; i--) {
+    CallFrame* frame = &vm.frames[i];
+    ObjFunction* function = frame->function;
+    size_t instruction = frame->ip - function->chunk.code - 1;
+    fprintf(stderr, "[line %d] in ", 
+            getLine(&function->chunk, instruction));
+    if (function->name == NULL) {
+      fprintf(stderr, "script\n");
+    } else {
+      fprintf(stderr, "%s()\n", function->name->chars);
+    }
+  }
   resetStack();
 }
 
@@ -54,6 +63,36 @@ Value pop(){
 
 static Value peek(int distance) {
   return vm.stackTop[-1 - distance];
+}
+
+static bool call(ObjFunction* function, int argCount) {
+  if(argCount != function->arity) {
+    runtimeError("Expected %d arguments but got %d.",
+        function->arity, argCount);
+    return false;
+  }
+  if (vm.frameCount == FRAMES_MAX) {
+    runtimeError("Stack overflow.");
+    return false;
+  }
+  CallFrame* frame = &vm.frames[vm.frameCount++];
+  frame->function = function;
+  frame->ip = function->chunk.code;
+  frame->slots = vm.stackTop - argCount - 1;
+  return true;
+}
+
+static bool callValue(Value callee, int argCount) {
+  if (IS_OBJ(callee)) {
+    switch (OBJ_TYPE(callee)) {
+      case OBJ_FUNCTION: 
+        return call(AS_FUNCTION(callee), argCount);
+      default:
+        break; // Non-callable object type.
+    }
+  }
+  runtimeError("Can only call functions and classes.");
+  return false;
 }
 
 static bool isFalsey(Value value) {
@@ -100,8 +139,14 @@ static void concatenate() {
 }
 
 static InterpretResult run() {
-#define READ_BYTE() (*vm.ip++)
-#define READ_CONSTANT() (vm.chunk->constants.values[READ_BYTE()])
+  CallFrame* frame = &vm.frames[vm.frameCount - 1];
+
+#define READ_BYTE() (*frame->ip++)
+#define READ_SHORT() \
+    ((uint16_t)((READ_BYTE() << 8) | READ_BYTE()))
+
+#define READ_CONSTANT() \
+    (frame->function->chunk.constants.values[READ_BYTE()])
 #define DISPATCH() goto *dispatch_table[instruction]
 #define BINARY_OP(valueType,op)\
     do{\
@@ -145,7 +190,8 @@ static void* dispatch_table[] =
   &&SET_LOCAL,
   &&JUMPOP,
   &&JUMP_IF_FALSE,
-  &&LOOP
+  &&LOOP,
+  &&CALL
   };
     JUMP:
     instruction = READ_BYTE();
@@ -160,7 +206,8 @@ static void* dispatch_table[] =
       printf(" ]");
     }
     printf("\n");
-    dissassembleInstruction(vm.chunk,(int)(vm.ip-vm.chunk->code-1));
+    dissassembleInstruction(&frame->function->chunk,
+        (int)(frame->ip - frame->function->chunk.code-1));
 #endif
 
     if(instruction<0 || instruction>=sizeof(dispatch_table)/sizeof(dispatch_table[0])){
@@ -168,10 +215,22 @@ static void* dispatch_table[] =
     }
     DISPATCH();
     RETURN:
-        return INTERPRET_OK;
-    CONSTANT:
+        {
+        Value result = pop();
+        vm.frameCount--;
+        if (vm.frameCount == 0) {
+            pop();
+          return INTERPRET_OK;
+        }
+        vm.stackTop = frame->slots;
+        push(result);
+        frame = &vm.frames[vm.frameCount - 1];
+        goto JUMP;
+        }
+    CONSTANT:{
         Value constant = READ_CONSTANT();
         push(constant);
+    }
         goto JUMP;
     NIL:
 
@@ -185,19 +244,19 @@ static void* dispatch_table[] =
         goto JUMP;
     GREATER:
         BINARY_OP(BOOL_VAL,>);goto JUMP;
-    EQUAL:
+    EQUAL:{
         Value b = pop();
         Value a = pop();
         push(BOOL_VAL(valuesEqual(a,b)));
+        }
         goto JUMP;
     LESS:
         BINARY_OP(BOOL_VAL,<);goto JUMP;
-    CONSTANT_LONG:
-        uint8_t high_byte = READ_BYTE();
-        uint8_t low_byte = READ_BYTE();
-        uint16_t combined = (high_byte<<8)|low_byte;
-        constant = vm.chunk->constants.values[combined];
+    CONSTANT_LONG:{
+        uint16_t combined = READ_SHORT();
+        Value constant = vm.chunk->constants.values[combined];
         push(constant);
+    }
         goto JUMP;    
     ADD:
         {
@@ -226,7 +285,7 @@ static void* dispatch_table[] =
         BINARY_OP(NUMBER_VAL,/);goto JUMP;
     NOT:
         push(BOOL_VAL(isFalsey(pop())));goto JUMP;
-    NEGATE:
+    NEGATE:{
         if(!IS_NUMBER(peek(0))){
             runtimeError("Operand must be a number.");
             return INTERPRET_RUNTIME_ERROR;
@@ -234,6 +293,7 @@ static void* dispatch_table[] =
         Value value = pop();
         push(NUMBER_VAL(-AS_NUMBER(value)));
         goto JUMP;
+    }
     POWER:
         {
             if(!IS_NUMBER(peek(0)) || !IS_NUMBER(peek(1))){
@@ -260,10 +320,8 @@ static void* dispatch_table[] =
         }
     DEFINE_GLOBAL_LONG:
         {
-            uint8_t high_byte = READ_BYTE();
-            uint8_t low_byte = READ_BYTE();
-            uint16_t combined = (high_byte<<8)|low_byte;
-            ObjString* name = AS_STRING(vm.chunk->constants.values[combined]);
+            uint16_t combined = READ_SHORT();
+            ObjString* name = AS_STRING(frame->function->chunk.constants.values[combined]);
             tableSet(&vm.globals,name,peek(0));
             pop();
             goto JUMP;
@@ -281,10 +339,8 @@ static void* dispatch_table[] =
         }
     GET_GLOBAL_LONG:
         {
-            uint8_t high_byte = READ_BYTE();
-            uint8_t low_byte = READ_BYTE();
-            uint16_t combined = (high_byte<<8)|low_byte;
-            ObjString* name = AS_STRING(vm.chunk->constants.values[combined]);
+            uint16_t combined = READ_SHORT();
+            ObjString* name = AS_STRING(frame->function->chunk.constants.values[combined]);
             Value value;
             if(!tableGet(&vm.globals,name,&value)){
                 runtimeError("Undefined variable '%s'.",name->chars);
@@ -305,10 +361,8 @@ static void* dispatch_table[] =
         }
     SET_GLOBAL_LONG:
         {
-            uint8_t high_byte = READ_BYTE();
-            uint8_t low_byte = READ_BYTE();
-            uint16_t combined = (high_byte<<8)|low_byte;
-            ObjString* name = AS_STRING(vm.chunk->constants.values[combined]);
+            uint16_t combined = READ_SHORT();
+            ObjString* name = AS_STRING(frame->function->chunk.constants.values[combined]);
             if(tableSet(&vm.globals,name,peek(0))){
                 tableDelete(&vm.globals,name);
                 runtimeError("Undefined variable '%s'.",name->chars);
@@ -319,46 +373,46 @@ static void* dispatch_table[] =
         }
     GET_LOCAL:
         {
-            uint8_t high_byte = READ_BYTE();
-            uint8_t low_byte = READ_BYTE();
-            uint16_t combined = (high_byte<<8)|low_byte;
-            push(vm.stack[combined]);
+            uint16_t combined = READ_SHORT();
+            push(frame->slots[combined]);
             goto JUMP;
         }
     SET_LOCAL:
         {
-            uint8_t high_byte = READ_BYTE();
-            uint8_t low_byte = READ_BYTE();
-            uint16_t combined = (high_byte<<8)|low_byte;
-            vm.stack[combined] = peek(0);
+            uint16_t combined = READ_SHORT();
+            frame->slots[combined] = peek(0);
             goto JUMP;
         }
     JUMPOP:
         {
-            uint8_t high_byte = READ_BYTE();
-            uint8_t low_byte = READ_BYTE();
-            uint16_t combined = (high_byte<<8)|low_byte;
-            vm.ip += combined;
+            uint16_t combined = READ_SHORT();
+            frame->ip += combined;
             goto JUMP;
         }
     JUMP_IF_FALSE:
-        {
-            uint8_t high_byte = READ_BYTE();
-            uint8_t low_byte = READ_BYTE();
-            uint16_t combined = (high_byte<<8)|low_byte;
+        {   
+
+            uint16_t combined = READ_SHORT();
             if(isFalsey(peek(0))){
-                vm.ip += combined;
+                frame->ip += combined;
             }
             goto JUMP;
         }
     LOOP:
         {
-            uint8_t high_byte = READ_BYTE();
-            uint8_t low_byte = READ_BYTE();
-            uint16_t combined = (high_byte<<8)|low_byte;
-            vm.ip -= combined;
+            uint16_t combined = READ_SHORT();
+            frame->ip -= combined;
             goto JUMP;
         }
+    CALL:
+        {
+        uint8_t argCount = READ_BYTE();
+        if (!callValue(peek(argCount), argCount)) {
+          return INTERPRET_RUNTIME_ERROR;
+        }
+        frame = &vm.frames[vm.frameCount - 1];
+        }
+        goto JUMP;
 #undef BINARY_OP        
 #undef READ_CONSTANT
 #undef DISPATCH
@@ -366,14 +420,12 @@ static void* dispatch_table[] =
 }
 
 InterpretResult interpret(const char* source){
-    Chunk chunk;
-    initChunk(&chunk);
-    if(!compile(source,&chunk)){
-        freeChunk(&chunk);
-        return INTERPRET_COMPILE_ERROR;
-    }
-    vm.chunk = &chunk;
-    vm.ip = vm.chunk->code;
-    InterpretResult result = run();
-    return result;
+    ObjFunction* function = compile(source);
+    if (function == NULL) return INTERPRET_COMPILE_ERROR;
+    push(OBJ_VAL(function));
+    CallFrame* frame = &vm.frames[vm.frameCount++];
+    frame->function = function;
+    frame->ip = function->chunk.code;
+    frame->slots = vm.stack;
+    return run();
 }

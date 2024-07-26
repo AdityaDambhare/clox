@@ -44,6 +44,12 @@ static int jumpInstruction(const char* name, int sign,
   return offset + 3;
 }
 
+static int byteInstruction(const char* name, Chunk* chunk, int offset) {
+  uint8_t slot = chunk->code[offset + 1];
+  printf("%-16s %4d\n", name, slot);
+  return offset + 2;
+}
+
 int dissassembleInstruction(Chunk* chunk, int offset) {
   printf("%04d ", offset);
   int line = getLine(chunk, offset);
@@ -82,7 +88,8 @@ int dissassembleInstruction(Chunk* chunk, int offset) {
   &&SET_LOCAL,
   &&JUMP,
   &&JUMP_IF_FALSE,
-  &&LOOP
+  &&LOOP,
+  &&CALL
   };
 
   uint8_t instruction = chunk->code[offset];
@@ -150,4 +157,6 @@ int dissassembleInstruction(Chunk* chunk, int offset) {
     return jumpInstruction("OP_JUMP_IF_FALSE", 1, chunk, offset);
   LOOP:
     return jumpInstruction("OP_LOOP", -1, chunk, offset);
+  CALL:
+    return byteInstruction("OP_CALL", chunk, offset);
 }
