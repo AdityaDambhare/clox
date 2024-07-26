@@ -430,6 +430,17 @@ static void parsePrecedence(Precedence precedence){
 }
 
 static int identifierConstant(Token* name) {
+  for(int i =0;i<currentChunk()->constants.count;i++){
+      if(IS_OBJ(currentChunk()->constants.values[i])
+      &&
+      OBJ_TYPE(currentChunk()->constants.values[i])==OBJ_STRING)
+      {
+          ObjString* string = AS_STRING(currentChunk()->constants.values[i]);
+          if(string->length == name->length && memcmp(string->chars,name->start,name->length)==0){
+              return i;
+          }
+      }
+  }
   return addConstant(currentChunk(), OBJ_VAL(copyString(name->start, name->length)));
 }
 
