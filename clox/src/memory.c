@@ -34,6 +34,14 @@ static void freeObject(Obj* object) {
   printf("%p free type %d\n", (void*)object, object->type);
 #endif
   switch (object->type) {
+    case OBJ_CLASS:
+      FREE(ObjClass, object);
+      break;
+    case OBJ_INSTANCE:
+      ObjInstance* instance = (ObjInstance*)object;
+      freeTable(&instance->fields);
+      FREE(ObjInstance, object);
+      break;
     case OBJ_STRING: {
       ObjString* string = (ObjString*)object;
       FREE_ARRAY(char, string->chars, string->length + 1);
@@ -99,6 +107,17 @@ static void blackenObject(Obj* object){
   printf("\n");
 #endif
   switch(object->type){
+    case OBJ_CLASS:{
+      ObjClass* klass = (ObjClass*)object;
+      markObject((Obj*)klass->name);//keep name alive
+      break;
+    }
+    case OBJ_INSTANCE:{
+      ObjInstance* instance = (ObjInstance*)object;
+      markObject((Obj*)instance->klass);
+      markTable(&instance->fields);
+      break;
+    }
     case OBJ_CLOSURE:{
       ObjClosure* closure = (ObjClosure*)object;
       markObject((Obj*)closure->function);
@@ -167,10 +186,6 @@ static void sweep(){
 void freeObjects(){
   Obj* object = vm.objects;
   while(object != NULL){
-    if(object->type > 7 || object->type < 0){
-      printf("Invalid object type %d\n",object->type);
-      break;
-    }
     Obj* next = object->next;
     freeObject(object);
     object = next;

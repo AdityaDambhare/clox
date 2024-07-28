@@ -34,6 +34,19 @@ ObjClosure* newClosure(ObjFunction* function) {
   return closure;
 }
 
+ObjInstance* newInstance(ObjClass* klass){
+  ObjInstance* instance = ALLOCATE_OBJ(ObjInstance,OBJ_INSTANCE);
+  instance->klass = klass;
+  initTable(&instance->fields,0);
+  return instance;
+}
+
+ObjClass* newClass(ObjString* name) {
+  ObjClass* klass = ALLOCATE_OBJ(ObjClass, OBJ_CLASS);//use klass as identifier so that c++ compiler does not get confused with class keyword
+  klass->name = name;
+  return klass;
+}
+
 ObjFunction* newFunction(){
   ObjFunction* function = ALLOCATE_OBJ(ObjFunction,OBJ_FUNCTION);
   function->arity=0;
@@ -108,6 +121,12 @@ void printFunction(ObjFunction* function) {
 }
 void printObject(Value value) {
   switch (OBJ_TYPE(value)) {
+    case OBJ_CLASS:
+      printf("%s", AS_CLASS(value)->name->chars);
+      break;
+    case OBJ_INSTANCE:
+      printf("%s instance", AS_INSTANCE(value)->klass->name->chars);
+      break;
     case OBJ_STRING:
       printf("%s", AS_CSTRING(value));
       break;

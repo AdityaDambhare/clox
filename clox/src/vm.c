@@ -107,6 +107,11 @@ static bool call(ObjClosure* closure, int argCount) {
 static bool callValue(Value callee, int argCount) {
   if (IS_OBJ(callee)) {
     switch (OBJ_TYPE(callee)) {
+      case OBJ_CLASS:{
+        ObjClass* klass = AS_CLASS(callee);
+        vm.stackTop[-argCount - 1] = OBJ_VAL(newInstance(klass));
+        return true;
+      }
       case OBJ_NATIVE: {
         NativeFn native = AS_NATIVE(callee);
         Value result = native(argCount, vm.stackTop - argCount);
@@ -257,7 +262,10 @@ static void* dispatch_table[] =
   &&CLOSURE,
   &&GET_UPVALUE,
   &&SET_UPVALUE,
-  &&CLOSE_UPVALUE
+  &&CLOSE_UPVALUE,
+  &&CLASS,
+  &&GET_MEM,
+  &&SET_MEM
   };
     JUMP:
     instruction = READ_BYTE();
@@ -516,6 +524,45 @@ static void* dispatch_table[] =
     {
         closeUpvalues(vm.stackTop - 1);
         pop();
+        goto JUMP;
+    }
+    CLASS:
+    {
+        ObjString* name = AS_STRING(READ_CONSTANT_LONG());
+        ObjClass* klass = newClass(name);
+        push(OBJ_VAL(klass));
+        goto JUMP;
+    }
+    GET_MEM:
+    {
+        ObjString* name = AS_STRING(READ_CONSTANT_LONG());
+        if(!IS_INSTANCE(peek(0))){
+            runtimeError("Only instances have properties.");
+            return INTERPRET_RUNTIME_ERROR;
+        }
+        ObjInstance* instance = AS_INSTANCE(peek(0));
+        Value value;
+        if(tableGet(&instance->fields,name,&value)){
+            pop();
+            push(value);
+            goto JUMP;
+        }
+        runtimeError("Undefined property '%s'.",name->chars);
+        return INTERPRET_RUNTIME_ERROR;
+    }
+    SET_MEM:
+    {   
+        ObjString* name = AS_STRING(READ_CONSTANT_LONG());
+        Value value = peek(0);
+        if(!IS_INSTANCE(peek(1))){
+            runtimeError("Only instances have fields.");
+            return INTERPRET_RUNTIME_ERROR;
+        }
+        ObjInstance* instance = AS_INSTANCE(peek(1));
+        tableSet(&instance->fields,name,value);
+        pop();
+        pop();
+        push(value);
         goto JUMP;
     }
 #undef BINARY_OP        

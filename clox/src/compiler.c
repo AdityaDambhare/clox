@@ -273,6 +273,20 @@ static void call(bool canAssign) {
   emitBytes(OP_CALL, argCount);
 }
 
+static void dot(bool canAssign){
+    consume(TOKEN_IDENTIFIER,"Expect property name after '.'.");
+    int name = identifierConstant(&parser.previous);
+    if(canAssign&&match(TOKEN_EQUAL)){
+        expression();
+        emitByte(OP_SET_PROPERTY);
+        emitBytes((uint8_t)(name >> 8), (uint8_t)(name & 0xff));
+    }
+    else{
+        emitByte(OP_GET_PROPERTY);
+        emitBytes((uint8_t)(name >> 8), (uint8_t)(name & 0xff));
+    }
+}
+
 static void conditional(bool canAssign){
     int elseJump = emitJump(OP_JUMP_IF_FALSE);
     emitByte(OP_POP);
@@ -398,7 +412,7 @@ ParseRule rules[] = {
   [TOKEN_LEFT_BRACE]    = {NULL,     NULL,   PREC_NONE}, 
   [TOKEN_RIGHT_BRACE]   = {NULL,     NULL,   PREC_NONE},
   [TOKEN_COMMA]         = {NULL,     comma,   PREC_COMMA},
-  [TOKEN_DOT]           = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_DOT]           = {NULL,     dot,   PREC_CALL},
   [TOKEN_MINUS]         = {unary,    binary, PREC_TERM},
   [TOKEN_PLUS]          = {NULL,     binary, PREC_TERM},
   [TOKEN_SEMICOLON]     = {NULL,     NULL,   PREC_NONE},
@@ -638,6 +652,17 @@ static void function(FunctionType type){
     }
 }
 
+static void classDeclaration(){
+    consume(TOKEN_IDENTIFIER,"Expect class name.");
+    uint16_t nameConstant = identifierConstant(&parser.previous);
+    declareVariable();
+    emitByte(OP_CLASS);
+    emitBytes((uint8_t)(nameConstant >> 8), (uint8_t)(nameConstant & 0xff));
+    defineVariable(nameConstant);
+    consume(TOKEN_LEFT_BRACE,"Expect '{' before class body.");
+    consume(TOKEN_RIGHT_BRACE,"Expect '}' after class body.");
+}
+
 static void functionDeclaration(){
     int global = parseVariable("Expect function name");
     markInitialized();
@@ -815,7 +840,10 @@ static void synchronize(){
 }
 
 static void declaration(){
-    if (match(TOKEN_VAR)) {
+    if(match(TOKEN_CLASS)){
+        classDeclaration();
+    }
+    else if (match(TOKEN_VAR)) {
     varDeclaration();
   } else if(match(TOKEN_FUN)){
     functionDeclaration();

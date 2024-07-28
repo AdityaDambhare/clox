@@ -66,7 +66,7 @@ int dissassembleInstruction(Chunk* chunk, int offset) {
   } else {
     printf("%4d ", line);
   }
-
+  //i really regret using computed gotos here. what was i thinking. 
   static void* dispatchTable[] = 
   {&&RETURN,
   &&CONSTANT,
@@ -101,7 +101,8 @@ int dissassembleInstruction(Chunk* chunk, int offset) {
   &&CLOSURE,
   &&GET_UP,
   &&SET_UP,
-  &&CLOSE_UP
+  &&CLOSE_UP,
+  &&CLASS
   };
 
   uint8_t instruction = chunk->code[offset];
@@ -192,4 +193,10 @@ int dissassembleInstruction(Chunk* chunk, int offset) {
     return byteInstructionLong("OP_SET_UPVALUE", chunk, offset);
   CLOSE_UP:
     return simpleInstruction("OP_CLOSE_UPVALUE", offset);
+  CLASS:
+    return constantInstructionLong("OP_CLASS", chunk, offset);
+  GET_MEM:
+    return constantInstructionLong("OP_GET_PROPERTY", chunk, offset);
+  SET_MEM:
+    return constantInstructionLong("OP_SET_PROPERTY", chunk, offset);
 }

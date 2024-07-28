@@ -7,5 +7,5 @@
 #define DEBUG_PRINT_CODE   
 //#define DUMP_PROGRAM_OUTPUT
 //#define DEBUG_STRESS_GC
-#define DEBUG_LOG_GC
+//#define DEBUG_LOG_GC
 #endif
