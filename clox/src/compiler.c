@@ -7,6 +7,7 @@
 #include "chunk.h"
 #include "object.h"
 #define UINT16_COUNT UINT16_MAX+1
+#define UINT8_COUNT UINT8_MAX+1
 #ifdef DEBUG_PRINT_CODE
 #include "debug.h"
 #endif
@@ -43,7 +44,13 @@ typedef struct{
 typedef struct {
     Token name;
     int depth;
+    bool isCaptured;
 }Local;
+
+typedef struct {
+  uint16_t index;
+  bool isLocal;
+} Upvalue;
 
 typedef enum{
     TYPE_FUNCTION,
@@ -60,6 +67,7 @@ typedef struct Compiler{
     FunctionType type;
     Local *locals;
     int localCount;
+    Upvalue *upvalues;
     int scopeDepth;
     int currentLoopStart;
     int currentLoopScope;
@@ -182,6 +190,7 @@ static void initCompiler(Compiler* compiler,FunctionType type){
     compiler->currentExitJump = -1;
     compiler->function = newFunction();
     compiler->locals = (Local*)malloc(sizeof(Local)*UINT16_COUNT);
+    compiler->upvalues = (Upvalue*)malloc(sizeof(Upvalue)*UINT16_COUNT);
     // implicitly giving the first slot to the vm for internal use
     current = compiler;
     if(type!=TYPE_SCRIPT){
@@ -191,7 +200,7 @@ static void initCompiler(Compiler* compiler,FunctionType type){
     local->depth = 0;
     local->name.start = "";
     local->name.length = 0;
-
+    local->isCaptured = false;
 }
 
 static ObjFunction* endCompiler(){
@@ -204,6 +213,7 @@ static ObjFunction* endCompiler(){
     }
 #endif
     free(current->locals);
+   // free(current->upvalues);
     current = current->enclosing;
     return function;
 }
@@ -215,7 +225,12 @@ static void beginScope(){
 static void endScope(){
     current->scopeDepth--;
     while(current->localCount>0&current->locals[current->localCount-1].depth>current->scopeDepth){
-        emitByte(OP_POP);
+        if(current->locals[current->localCount-1].isCaptured){
+            emitByte(OP_CLOSE_UPVALUE);
+        }
+        else{
+            emitByte(OP_POP);
+        }
         current->localCount--;
     }//pops all the local variables that are out of scope
 }
@@ -229,7 +244,7 @@ static ParseRule* getRule(TokenType type);
 static void parsePrecedence(Precedence precedence);
 static int resolveLocal(Compiler* compiler,Token* name);
 static uint8_t argumentList();
-
+static int resolveUpvalue(Compiler* compiler, Token* name);
 
 static void binary(bool canAssign){
     TokenType operatorType = parser.previous.type;
@@ -320,11 +335,25 @@ static void localVariable(Token token,bool canAssign,int arg){
         emitBytes((uint8_t)(arg>>8),(uint8_t)(arg&0xff));
     }
 }
+static void UpValue(Token token,bool canAssign,uint16_t arg){
+    if(canAssign&&match(TOKEN_EQUAL)){
+        expression();
+        emitByte(OP_SET_UPVALUE);
+        emitBytes((uint8_t)(arg>>8),(uint8_t)(arg&0xff));
+    }
+    else{
+        emitByte(OP_GET_UPVALUE);
+        emitBytes((uint8_t)(arg>>8),(uint8_t)(arg&0xff));
+    }
+}
 static void namedVariable(Token token,bool canAssign){
     int  arg = resolveLocal(current,&token);
     if(arg!=-1){
         localVariable(token,canAssign,arg);
         return;
+    } else if ((arg = resolveUpvalue(current,&token))!=-1) {
+        UpValue(token,canAssign,(uint16_t)arg);
+        return ;
     }
     else{
         arg = (uint16_t)identifierConstant(&token);
@@ -463,6 +492,39 @@ static int resolveLocal(Compiler* compiler, Token* name) {
   return -1;
 }
 
+static int addUpvalue(Compiler* compiler, uint16_t index,
+                      bool isLocal) {
+  int upvalueCount = compiler->function->upvalueCount;
+  for(int i = 0;i<upvalueCount;i++){
+      Upvalue* upvalue = &compiler->upvalues[i];
+      if(upvalue->index == index && upvalue->isLocal == isLocal){
+          return i;
+      }
+  }
+  if(upvalueCount == UINT16_COUNT){
+      error("Too many closure variables in function.");
+      return 0;
+  }
+  compiler->upvalues[upvalueCount].isLocal = isLocal;
+  compiler->upvalues[upvalueCount].index = index;
+  return compiler->function->upvalueCount++;
+}
+
+static int resolveUpvalue(Compiler* compiler, Token* name) {
+  if (compiler->enclosing == NULL) return -1;
+
+  int local = resolveLocal(compiler->enclosing, name);
+  if (local != -1) {
+    compiler->enclosing->locals[local].isCaptured = true;
+    return addUpvalue(compiler, (uint16_t)local, true);
+  }
+  int upvalue = resolveUpvalue(compiler->enclosing, name);
+  if (upvalue != -1) {
+    return addUpvalue(compiler, (uint16_t)upvalue, false);
+  }
+  return -1;
+}
+
 static void addLocal(Token name){
     if(current->localCount == UINT16_COUNT){
         error("Too many local variables in function.");
@@ -471,6 +533,7 @@ static void addLocal(Token name){
     Local* local = &current->locals[current->localCount++];
     local->name = name;
     local->depth = -1;
+    local->isCaptured = false;
 }
 static void declareVariable(){
     if(current->scopeDepth == 0) return;
@@ -562,8 +625,15 @@ static void function(FunctionType type){
     consume(TOKEN_LEFT_BRACE,"Expect '{' before function body.");
     block();
     ObjFunction* function = endCompiler();
-    if(!writeConstant(currentChunk(),OBJ_VAL(function),parser.previous.line)){
+    emitByte(OP_CLOSURE);
+    uint16_t func = addConstant(currentChunk(),OBJ_VAL(function));
+    if(func>UINT16_COUNT-1){
         error("Too many constants in one chunk.");
+    }
+    emitBytes((uint8_t)(func >> 8), (uint8_t)(func & 0xff));
+    for (int i = 0; i < function->upvalueCount; i++){
+        emitByte((uint8_t)(compiler.upvalues[i].isLocal ? 1 : 0));
+        emitBytes((uint8_t)(compiler.upvalues[i].index>>8),(uint8_t)(compiler.upvalues[i].index&0xff));
     }
 }
 

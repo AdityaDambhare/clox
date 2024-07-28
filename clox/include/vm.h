@@ -8,7 +8,7 @@
 #include "object.h"
 
 typedef struct {
-  ObjFunction* function;
+  ObjClosure* closure;
   uint8_t* ip;
   Value* slots;
 } CallFrame;
@@ -23,6 +23,7 @@ typedef struct{
     Obj* objects;
     Table strings;
     Table globals;
+    ObjUpvalue* openUpvalues;
 }VM;
 
 typedef enum{
@@ -38,4 +39,5 @@ InterpretResult interpret(const char* source);
 
 void push(Value value);
 Value pop();
+
 #endif

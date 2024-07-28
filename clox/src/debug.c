@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include "debug.h"
 #include "value.h"
-
+#include "object.h"
 void dissassembleChunk(Chunk* chunk, const char* name) {
   printf("== %s ==\n", name);
 
@@ -20,7 +20,7 @@ static int constantInstruction(const char* name,Chunk* chunk,int offset){
   printf("'\n");
   return offset+2;
 }
-static int constantIntsructionLong(const char* name,Chunk* chunk,int offset){
+static int constantInstructionLong(const char* name,Chunk* chunk,int offset){
   uint8_t high_byte = chunk->code[offset+1];
   uint8_t low_byte = chunk->code[offset+2];
   uint16_t combined = (high_byte<<8)|low_byte;
@@ -48,6 +48,14 @@ static int byteInstruction(const char* name, Chunk* chunk, int offset) {
   uint8_t slot = chunk->code[offset + 1];
   printf("%-16s %4d\n", name, slot);
   return offset + 2;
+}
+
+static int byteInstructionLong(const char* name, Chunk* chunk, int offset) {
+  uint8_t high_byte = chunk->code[offset + 1];
+  uint8_t low_byte = chunk->code[offset + 2];
+  uint16_t combined = (high_byte << 8) | low_byte;
+  printf("%-16s %4d\n", name, combined);
+  return offset + 3;
 }
 
 int dissassembleInstruction(Chunk* chunk, int offset) {
@@ -89,7 +97,11 @@ int dissassembleInstruction(Chunk* chunk, int offset) {
   &&JUMP,
   &&JUMP_IF_FALSE,
   &&LOOP,
-  &&CALL
+  &&CALL,
+  &&CLOSURE,
+  &&GET_UP,
+  &&SET_UP,
+  &&CLOSE_UP
   };
 
   uint8_t instruction = chunk->code[offset];
@@ -116,7 +128,7 @@ int dissassembleInstruction(Chunk* chunk, int offset) {
   LESS:
     return simpleInstruction("OP_LESS",offset);
   CONSTANT_LONG:
-    return constantIntsructionLong("OP_CONSTANT_LONG",chunk,offset);
+    return constantInstructionLong("OP_CONSTANT_LONG",chunk,offset);
   ADD:
     return simpleInstruction("OP_ADD",offset);
   SUBTRACT:
@@ -138,19 +150,19 @@ int dissassembleInstruction(Chunk* chunk, int offset) {
   DEFINE_GLOBAL:
     return constantInstruction("OP_DEFINE_GLOBAL",chunk,offset);
   DEFINE_GLOBAL_LONG:
-    return constantIntsructionLong("OP_DEFINE_GLOBAL_LONG",chunk,offset);
+    return constantInstructionLong("OP_DEFINE_GLOBAL_LONG",chunk,offset);
   GET_GLOBAL:
     return constantInstruction("OP_GET_GLOBAL",chunk,offset);
   GET_GLOBAL_LONG:
-    return constantIntsructionLong("OP_GET_GLOBAL_LONG",chunk,offset);
+    return constantInstructionLong("OP_GET_GLOBAL_LONG",chunk,offset);
   SET_GLOBAL:
     return constantInstruction("OP_SET_GLOBAL",chunk,offset);
   SET_GLOBAL_LONG:
-    return constantIntsructionLong("OP_SET_GLOBAL_LONG",chunk,offset);
+    return constantInstructionLong("OP_SET_GLOBAL_LONG",chunk,offset);
   GET_LOCAL:
-    return constantIntsructionLong("OP_GET_LOCAL",chunk,offset);
+    return constantInstructionLong("OP_GET_LOCAL",chunk,offset);
   SET_LOCAL:
-    return constantIntsructionLong("OP_SET_LOCAL",chunk,offset);
+    return constantInstructionLong("OP_SET_LOCAL",chunk,offset);
   JUMP:
     return jumpInstruction("OP_JUMP", 1, chunk, offset);
   JUMP_IF_FALSE:
@@ -159,4 +171,25 @@ int dissassembleInstruction(Chunk* chunk, int offset) {
     return jumpInstruction("OP_LOOP", -1, chunk, offset);
   CALL:
     return byteInstruction("OP_CALL", chunk, offset);
+  CLOSURE:
+    { offset++;
+      int constant = chunk->code[offset++]<<8|chunk->code[offset++];
+      printf("%-16s %4d ", "OP_CLOSURE", constant);
+      printValue(chunk->constants.values[constant]);
+      printf("\n");
+      ObjFunction* function = AS_FUNCTION(chunk->constants.values[constant]);
+      for (int j = 0; j < function->upvalueCount; j++) {
+        int isLocal = chunk->code[offset++];
+        int index = chunk->code[offset++]<<8|chunk->code[offset++];
+        printf("%04d      |                     %s %d\n",
+               offset - 2, isLocal ? "local" : "upvalue", index);
+      }
+      return offset;    
+    }
+  GET_UP:
+    return byteInstructionLong("OP_GET_UPVALUE", chunk, offset);
+  SET_UP:
+    return byteInstructionLong("OP_SET_UPVALUE", chunk, offset);
+  CLOSE_UP:
+    return simpleInstruction("OP_CLOSE_UPVALUE", offset);
 }
