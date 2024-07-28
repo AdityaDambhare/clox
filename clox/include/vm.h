@@ -20,10 +20,15 @@ typedef struct{
     int frameCount;
     Value stack[STACK_MAX];
     Value* stackTop;
+    size_t bytesAllocated;
+    size_t nextGC;
     Obj* objects;
     Table strings;
     Table globals;
     ObjUpvalue* openUpvalues;
+    int grayCount;
+    int grayCapacity;
+    Obj** grayStack;
 }VM;
 
 typedef enum{

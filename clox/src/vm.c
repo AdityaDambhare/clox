@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
+#include <stdlib.h>
 #include <math.h>
 #include <time.h>
 #include "common.h"
@@ -53,8 +54,13 @@ static void defineNative(const char* name, NativeFn function) {
 void initVM(){
     resetStack();
     vm.objects = NULL;
-    initTable(&vm.strings);
-    initTable(&vm.globals);
+    initTable(&vm.strings,64);
+    initTable(&vm.globals,64);
+    vm.bytesAllocated = 0;
+    vm.nextGC = 1024 * 256;
+    vm.grayCount = 0;
+    vm.grayCapacity = 0;
+    vm.grayStack = NULL;
     defineNative("clock", clockNative);
 }
 
@@ -62,6 +68,7 @@ void freeVM(){
     freeObjects();
     freeTable(&vm.strings);
     freeTable(&vm.globals);
+    free(vm.grayStack);
 }   
 
 
@@ -174,17 +181,19 @@ ObjString* value_to_string(Value value, int precision) {
 }
 
 static void concatenate() {
-  Value b_val =  pop();
-  Value a_val =  pop();
+  Value b_val =  peek(0);
+  Value a_val =  peek(1);
   ObjString* a = IS_NUMBER(a_val)?value_to_string(a_val,10):AS_STRING(a_val);
   ObjString* b = IS_NUMBER(b_val)?value_to_string(b_val,10):AS_STRING(b_val);
   int length = a->length + b->length;
+
   char* chars = ALLOCATE(char, length + 1);
   memcpy(chars, a->chars, a->length);
   memcpy(chars + a->length, b->chars, b->length);
   chars[length] = '\0';
 
   ObjString* result = takeString(chars, length);
+  pop();pop();
   push(OBJ_VAL(result));
 }
 

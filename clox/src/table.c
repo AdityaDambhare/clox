@@ -8,16 +8,16 @@
 
 static void adjustCapacity(Table* table,int capacity);
 
-void initTable(Table* table){
+void initTable(Table* table,int capacity){
     table->count =0;
     table->capacity = 0;
     table->entries = NULL;
-    adjustCapacity(table,64);
+    adjustCapacity(table,capacity);
 }
 
 void freeTable(Table* table){
     FREE_ARRAY(Entry,table->entries,table->capacity);
-    initTable(table);
+    initTable(table,0);
 }
 
 
@@ -68,6 +68,22 @@ ObjString* tableFindString(Table* table,const char* chars,int length,uint32_t ha
     return NULL;
 }
 
+void markTable(Table* table){
+    for(int i = 0;i<table->capacity;i++){
+        Entry* entry = &table->entries[i];
+        markObject((Obj*)entry->key);   
+        markValue(entry->value);
+    }
+}
+
+void tableRemoveWhite(Table* table){
+    for(int i =0;i<table->capacity;i++){
+        Entry* entry = &table->entries[i];
+        if(entry->key!=NULL&&!entry->key->obj.isMarked){
+            tableDelete(table,entry->key);//after sweep() deletes the object , it won't create a dangling pointer
+        }
+    }
+}
 
 static void adjustCapacity(Table* table,int capacity){
     Entry* entries = ALLOCATE(Entry,capacity);
