@@ -73,7 +73,7 @@ void markObject(Obj *object){
   if(object == NULL ) return;
   if(object->isMarked) return;
 #ifdef DEBUG_LOG_GC
-  printf("%p mark", (void*)object);
+  printf("%p mark ", (void*)object);
   printValue(OBJ_VAL(object));
   printf("\n");
 #endif
@@ -102,7 +102,7 @@ void markValue(Value slot){
 
 static void blackenObject(Obj* object){
 #ifdef DEBUG_LOG_GC
-  printf("%p blacken", (void*)object);
+  printf("%p blacken ", (void*)object);
   printValue(OBJ_VAL(object));
   printf("\n");
 #endif

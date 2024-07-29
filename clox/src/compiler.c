@@ -474,17 +474,6 @@ static void parsePrecedence(Precedence precedence){
 }
 
 static int identifierConstant(Token* name) {
-  for(int i =0;i<currentChunk()->constants.count;i++){
-      if(IS_OBJ(currentChunk()->constants.values[i])
-      &&
-      OBJ_TYPE(currentChunk()->constants.values[i])==OBJ_STRING)
-      {
-          ObjString* string = AS_STRING(currentChunk()->constants.values[i]);
-          if(string->length == name->length && memcmp(string->chars,name->start,name->length)==0){
-              return i;
-          }
-      }
-  }
   return addConstant(currentChunk(), OBJ_VAL(copyString(name->start, name->length)));
 }
 
@@ -640,8 +629,9 @@ static void function(FunctionType type){
     consume(TOKEN_LEFT_BRACE,"Expect '{' before function body.");
     block();
     ObjFunction* function = endCompiler();
-    emitByte(OP_CLOSURE);
-    uint16_t func = addConstant(currentChunk(),OBJ_VAL(function));
+    int func = addConstant(currentChunk(),OBJ_VAL(function)); // you don't know just HOW important the order of these two lines is
+    emitByte(OP_CLOSURE);//with DEBUG_STRESS_GC enabled, emitByte() will call the gc, free the function and the function will be deallocated before it is added to the constants array
+    //i spent 2 hours trying to find the line causing this bug
     if(func>UINT16_COUNT-1){
         error("Too many constants in one chunk.");
     }

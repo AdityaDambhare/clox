@@ -102,7 +102,9 @@ int dissassembleInstruction(Chunk* chunk, int offset) {
   &&GET_UP,
   &&SET_UP,
   &&CLOSE_UP,
-  &&CLASS
+  &&CLASS,
+  &&GET_MEM,
+  &&SET_MEM
   };
 
   uint8_t instruction = chunk->code[offset];
