@@ -1,6 +1,6 @@
 #ifndef CLOX_VM_H
 #define CLOX_VM_H
-#define FRAMES_MAX 256
+#define FRAMES_MAX 1024
 #define STACK_MAX (FRAMES_MAX * UINT8_MAX)
 #include "chunk.h"
 #include "value.h"

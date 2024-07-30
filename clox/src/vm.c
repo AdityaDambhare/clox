@@ -339,7 +339,10 @@ static void* dispatch_table[] =
   &&GET_MEM,
   &&SET_MEM,
   &&METHOD,
-  &&INVOKE
+  &&INVOKE,
+  &&INHERIT,
+  &&SUPER_GET,
+  &&SUPER_INVOKE
   };
     JUMP:
     instruction = READ_BYTE();
@@ -658,6 +661,39 @@ static void* dispatch_table[] =
         int argCount = READ_BYTE();
         frame->ip = ip;
         if(!invoke(method,argCount)){
+            return INTERPRET_RUNTIME_ERROR;
+        }
+        frame = &vm.frames[vm.frameCount-1];
+        ip = frame->ip;
+        goto JUMP;
+    }
+    INHERIT:{
+        Value superclasss = peek(1);
+        if(!IS_CLASS(superclasss)){
+            frame->ip = ip;
+            runtimeError("Superclass must be a class.");
+            return INTERPRET_RUNTIME_ERROR;
+        }
+        ObjClass* supklass = AS_CLASS(superclasss);
+        ObjClass* subclass = AS_CLASS(peek(0));
+        tableAddAll(&supklass->methods,&subclass->methods);
+        pop();//remove only the superclass from the stack
+        goto JUMP;
+    }
+    SUPER_GET:{
+        ObjString* name = AS_STRING(READ_CONSTANT_LONG());
+        ObjClass* superclass = AS_CLASS(pop());
+        frame->ip = ip;
+        if(!bindMethod(superclass,name)){
+            return INTERPRET_RUNTIME_ERROR;
+        }
+        goto JUMP;
+    }
+    SUPER_INVOKE:{
+        ObjString* method = AS_STRING(READ_CONSTANT_LONG());
+        int argcount = READ_BYTE();
+        frame->ip = ip;
+        if(!invokeFromClass(AS_CLASS(pop()),method,argcount)){
             return INTERPRET_RUNTIME_ERROR;
         }
         frame = &vm.frames[vm.frameCount-1];

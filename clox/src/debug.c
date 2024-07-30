@@ -106,7 +106,10 @@ int dissassembleInstruction(Chunk* chunk, int offset) {
   &&GET_MEM,
   &&SET_MEM,
   &&METHOD,
-  &&INVOKE
+  &&INVOKE,
+  &&INHERIT,
+  &&SUPER_GET,
+  &&SUPER_INVOKE
   };
 
   uint8_t instruction = chunk->code[offset];
@@ -211,6 +214,20 @@ int dissassembleInstruction(Chunk* chunk, int offset) {
       int constant = chunk->code[offset++]<<8|chunk->code[offset++];
       int argCount = chunk->code[offset++];
       printf("%-16s (%d args) %4d '", "OP_INVOKE", argCount, constant);
+      printValue(chunk->constants.values[constant]);
+      printf("'\n");
+      return offset;
+    }
+  INHERIT:
+    return simpleInstruction("OP_INHERIT", offset);
+  SUPER_GET:
+    return constantInstructionLong("OP_GET_SUPER", chunk, offset);
+  SUPER_INVOKE:
+    {
+      offset++;
+      int constant = chunk->code[offset++]<<8|chunk->code[offset++];
+      int argCount = chunk->code[offset++];
+      printf("%-16s (%d args) %4d '", "OP_INVOKE_SUPER", argCount, constant);
       printValue(chunk->constants.values[constant]);
       printf("'\n");
       return offset;
