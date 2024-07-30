@@ -133,6 +133,6 @@ bool tableDelete(Table* table,ObjString* key){
     Entry* entry = findEntry(table->entries,table->capacity,key);
     if(entry->key==NULL) return false;//key not found or already deleted
     entry->key = NULL;
-    entry->value = UNDEF_VAL;//create tombstone
+    entry->value = BOOL_VAL(false);//create tombstone
     return true;
 }
