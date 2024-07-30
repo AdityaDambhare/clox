@@ -104,7 +104,8 @@ int dissassembleInstruction(Chunk* chunk, int offset) {
   &&CLOSE_UP,
   &&CLASS,
   &&GET_MEM,
-  &&SET_MEM
+  &&SET_MEM,
+  &&METHOD
   };
 
   uint8_t instruction = chunk->code[offset];
@@ -201,4 +202,6 @@ int dissassembleInstruction(Chunk* chunk, int offset) {
     return constantInstructionLong("OP_GET_PROPERTY", chunk, offset);
   SET_MEM:
     return constantInstructionLong("OP_SET_PROPERTY", chunk, offset);
+  METHOD:
+    return constantInstructionLong("OP_METHOD", chunk, offset);
 }

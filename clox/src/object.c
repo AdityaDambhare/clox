@@ -22,6 +22,13 @@ static Obj* allocateObject(size_t size, ObjType type) {
   return object;
 }
 
+ObjBoundMethod* newBoundMethod(Value reciever,ObjClosure* method){
+  ObjBoundMethod* bound = ALLOCATE_OBJ(ObjBoundMethod,OBJ_BOUND_METHOD);
+  bound->receiver = reciever;
+  bound->method = method;
+  return bound;
+}
+
 ObjClosure* newClosure(ObjFunction* function) {
   ObjUpvalue** upvalues = ALLOCATE(ObjUpvalue*,function->upvalueCount);
   for (int i = 0; i < function->upvalueCount; i++) {
@@ -44,6 +51,7 @@ ObjInstance* newInstance(ObjClass* klass){
 ObjClass* newClass(ObjString* name) {
   ObjClass* klass = ALLOCATE_OBJ(ObjClass, OBJ_CLASS);//use klass as identifier so that c++ compiler does not get confused with class keyword
   klass->name = name;
+  initTable(&klass->methods,0);
   return klass;
 }
 
@@ -121,6 +129,9 @@ void printFunction(ObjFunction* function) {
 }
 void printObject(Value value) {
   switch (OBJ_TYPE(value)) {
+    case OBJ_BOUND_METHOD:
+      printFunction(AS_BOUND_METHOD(value)->method->function);
+      break;
     case OBJ_CLASS:
       printf("%s", AS_CLASS(value)->name->chars);
       break;

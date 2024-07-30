@@ -57,7 +57,7 @@ void initVM(){
     initTable(&vm.strings,64);
     initTable(&vm.globals,64);
     vm.bytesAllocated = 0;
-    vm.nextGC = 1024 * 256;
+    vm.nextGC = 1024*16;
     vm.grayCount = 0;
     vm.grayCapacity = 0;
     vm.grayStack = NULL;
@@ -107,6 +107,11 @@ static bool call(ObjClosure* closure, int argCount) {
 static bool callValue(Value callee, int argCount) {
   if (IS_OBJ(callee)) {
     switch (OBJ_TYPE(callee)) {
+      case OBJ_BOUND_METHOD: {
+        ObjBoundMethod* bound = AS_BOUND_METHOD(callee);
+        vm.stackTop[-argCount - 1] = bound->receiver;
+        return call(bound->method, argCount);
+      }
       case OBJ_CLASS:{
         ObjClass* klass = AS_CLASS(callee);
         vm.stackTop[-argCount - 1] = OBJ_VAL(newInstance(klass));
@@ -127,6 +132,20 @@ static bool callValue(Value callee, int argCount) {
   runtimeError("Can only call functions and classes.");
   return false;
 }
+}
+
+static bool bindMethod(ObjClass* klass, ObjString* name) {
+  Value method;
+  if (!tableGet(&klass->methods, name, &method)) {
+    runtimeError("Undefined property '%s'.", name->chars);
+    return false;
+  }
+
+  ObjBoundMethod* bound = newBoundMethod(peek(0),
+                                         AS_CLOSURE(method));
+  pop();
+  push(OBJ_VAL(bound));
+  return true;
 }
 
 static ObjUpvalue* captureUpvalue(Value* local) {
@@ -155,6 +174,13 @@ static void closeUpvalues(Value* last) {
     upvalue->location = &upvalue->closed;
     vm.openUpvalues = upvalue->next;
   }
+}
+
+static void defineMethod(ObjString* name){
+    Value method = peek(0);
+    ObjClass* klass = AS_CLASS(peek(1));
+    tableSet(&klass->methods,name,method);
+    pop();//pop the method but keep the class
 }
 
 static bool isFalsey(Value value) {
@@ -265,7 +291,8 @@ static void* dispatch_table[] =
   &&CLOSE_UPVALUE,
   &&CLASS,
   &&GET_MEM,
-  &&SET_MEM
+  &&SET_MEM,
+  &&METHOD
   };
     JUMP:
     instruction = READ_BYTE();
@@ -418,6 +445,7 @@ static void* dispatch_table[] =
             ObjString* name = AS_STRING(READ_CONSTANT_LONG());
             Value value;
             if(!tableGet(&vm.globals,name,&value)){
+                frame->ip = ip;
                 runtimeError("Undefined variable '%s'.",name->chars);
                 return INTERPRET_RUNTIME_ERROR;
             }
@@ -430,6 +458,7 @@ static void* dispatch_table[] =
             if(tableSet(&vm.globals,name,peek(0))){//tableSet returns true is the key is new
                 frame->ip = ip;
                 tableDelete(&vm.globals,name);
+                frame->ip = ip;
                 runtimeError("Undefined variable '%s'.",name->chars);//in that case the variable must be undefined
                 return INTERPRET_RUNTIME_ERROR;
             }
@@ -441,6 +470,7 @@ static void* dispatch_table[] =
             if(tableSet(&vm.globals,name,peek(0))){
                 frame->ip = ip;
                 tableDelete(&vm.globals,name);
+                frame->ip = ip;
                 runtimeError("Undefined variable '%s'.",name->chars);
                 return INTERPRET_RUNTIME_ERROR;
             }
@@ -537,6 +567,7 @@ static void* dispatch_table[] =
     {
         ObjString* name = AS_STRING(READ_CONSTANT_LONG());
         if(!IS_INSTANCE(peek(0))){
+            frame->ip = ip;
             runtimeError("Only instances have properties.");
             return INTERPRET_RUNTIME_ERROR;
         }
@@ -547,14 +578,18 @@ static void* dispatch_table[] =
             push(value);
             goto JUMP;
         }
-        runtimeError("Undefined property '%s'.",name->chars);
-        return INTERPRET_RUNTIME_ERROR;
+        frame->ip = ip;
+        if(!bindMethod(instance->klass, name)) {
+          return INTERPRET_RUNTIME_ERROR;
+        }
+        goto JUMP;
     }
     SET_MEM:
     {   
         ObjString* name = AS_STRING(READ_CONSTANT_LONG());
         Value value = peek(0);
         if(!IS_INSTANCE(peek(1))){
+            frame->ip = ip;
             runtimeError("Only instances have fields.");
             return INTERPRET_RUNTIME_ERROR;
         }
@@ -565,6 +600,12 @@ static void* dispatch_table[] =
         push(value);
         goto JUMP;
     }
+    METHOD:
+    {   frame->ip = ip;
+        defineMethod(AS_STRING(READ_CONSTANT_LONG()));
+        goto JUMP;
+    }
+    
 #undef BINARY_OP        
 #undef READ_CONSTANT
 #undef READ_SHORT

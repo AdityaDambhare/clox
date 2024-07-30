@@ -202,6 +202,13 @@ static void initCompiler(Compiler* compiler,FunctionType type){
     local->name.start = "";
     local->name.length = 0;
     local->isCaptured = false;
+    if (type != TYPE_FUNCTION) {
+    local->name.start = "this";
+    local->name.length = 4;
+  } else {
+    local->name.start = "";
+    local->name.length = 0;
+  }
 }
 
 static ObjFunction* endCompiler(){
@@ -406,6 +413,14 @@ static void unary(bool canAssign){
     }
 }
 
+static void this_(bool canAssign){
+    if(current->type != TYPE_METHOD){
+        error("Can't use 'this' outside of a class.");
+        return;
+    }
+    variable(false);
+}
+
 ParseRule rules[] = {
   [TOKEN_LEFT_PAREN]    = {grouping, call,   PREC_CALL},
   [TOKEN_RIGHT_PAREN]   = {NULL,     NULL,   PREC_NONE},
@@ -444,7 +459,7 @@ ParseRule rules[] = {
   [TOKEN_PRINT]         = {NULL,     NULL,   PREC_NONE},
   [TOKEN_RETURN]        = {NULL,     NULL,   PREC_NONE},
   [TOKEN_SUPER]         = {NULL,     NULL,   PREC_NONE},
-  [TOKEN_THIS]          = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_THIS]          = {this_,     NULL,   PREC_NONE},
   [TOKEN_TRUE]          = {literal,     NULL,   PREC_NONE},
   [TOKEN_VAR]           = {NULL,     NULL,   PREC_NONE},
   [TOKEN_WHILE]         = {NULL,     NULL,   PREC_NONE},
@@ -474,6 +489,17 @@ static void parsePrecedence(Precedence precedence){
 }
 
 static int identifierConstant(Token* name) {
+  for(int i = 0;i<currentChunk()->constants.count;i++){
+      if(IS_OBJ(currentChunk()->constants.values[i])
+        &&
+        OBJ_TYPE(currentChunk()->constants.values[i])==OBJ_STRING)
+     {
+          ObjString* string = AS_STRING(currentChunk()->constants.values[i]);
+          if(string->length == name->length && memcmp(string->chars,name->start,name->length)==0){
+              return i;
+          }
+      }
+  }
   return addConstant(currentChunk(), OBJ_VAL(copyString(name->start, name->length)));
 }
 
@@ -642,15 +668,29 @@ static void function(FunctionType type){
     }
 }
 
+static void method(){
+    consume(TOKEN_IDENTIFIER,"Expect method name.");
+    uint16_t constant = identifierConstant(&parser.previous);
+    FunctionType type = TYPE_METHOD;
+    function(type);
+    emitByte(OP_METHOD);
+    emitBytes((uint8_t)(constant >> 8), (uint8_t)(constant & 0xff));
+}
 static void classDeclaration(){
     consume(TOKEN_IDENTIFIER,"Expect class name.");
+    Token name = parser.previous;
     uint16_t nameConstant = identifierConstant(&parser.previous);
     declareVariable();
     emitByte(OP_CLASS);
     emitBytes((uint8_t)(nameConstant >> 8), (uint8_t)(nameConstant & 0xff));
     defineVariable(nameConstant);
+    namedVariable(name,false);//load variable onto the stack
     consume(TOKEN_LEFT_BRACE,"Expect '{' before class body.");
+    while(!check(TOKEN_RIGHT_BRACE)&&!check(TOKEN_EOF)){
+        method();
+    }
     consume(TOKEN_RIGHT_BRACE,"Expect '}' after class body.");
+    emitByte(OP_POP);
 }
 
 static void functionDeclaration(){
