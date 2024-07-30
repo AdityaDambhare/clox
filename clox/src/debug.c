@@ -105,7 +105,8 @@ int dissassembleInstruction(Chunk* chunk, int offset) {
   &&CLASS,
   &&GET_MEM,
   &&SET_MEM,
-  &&METHOD
+  &&METHOD,
+  &&INVOKE
   };
 
   uint8_t instruction = chunk->code[offset];
@@ -204,4 +205,14 @@ int dissassembleInstruction(Chunk* chunk, int offset) {
     return constantInstructionLong("OP_SET_PROPERTY", chunk, offset);
   METHOD:
     return constantInstructionLong("OP_METHOD", chunk, offset);
+  INVOKE:
+    {
+      offset++;
+      int constant = chunk->code[offset++]<<8|chunk->code[offset++];
+      int argCount = chunk->code[offset++];
+      printf("%-16s (%d args) %4d '", "OP_INVOKE", argCount, constant);
+      printValue(chunk->constants.values[constant]);
+      printf("'\n");
+      return offset;
+    }
 }

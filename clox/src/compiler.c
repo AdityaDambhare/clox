@@ -76,9 +76,17 @@ typedef struct Compiler{
 
 }Compiler;
 
+typedef struct ClassCompiler{
+    struct ClassCompiler* enclosing;
+}ClassCompiler;
+
+
 
 Parser parser;
-static Compiler* current;
+static Compiler* current = NULL;
+static ClassCompiler* currentClass = NULL;
+
+
 static Chunk* currentChunk(){
     return &current->function->chunk;
 }
@@ -159,7 +167,13 @@ static int emitJump(uint8_t instruction) {
 }
 
 static void emitReturn(){
-    emitByte(OP_NIL);
+    if(current->type==TYPE_INITIALIZER){
+        emitByte(OP_GET_LOCAL);
+        emitBytes(0,0); 
+    }
+    else{
+        emitByte(OP_NIL);
+    }
     emitByte(OP_RETURN);
 }
 
@@ -287,6 +301,11 @@ static void dot(bool canAssign){
         expression();
         emitByte(OP_SET_PROPERTY);
         emitBytes((uint8_t)(name >> 8), (uint8_t)(name & 0xff));
+    } else if (match(TOKEN_LEFT_PAREN)){
+        uint8_t argCount = argumentList();
+        emitByte(OP_INVOKE);
+        emitBytes((uint8_t)(name>>8),(uint8_t)(name&0xff));
+        emitByte(argCount);
     }
     else{
         emitByte(OP_GET_PROPERTY);
@@ -414,7 +433,7 @@ static void unary(bool canAssign){
 }
 
 static void this_(bool canAssign){
-    if(current->type != TYPE_METHOD){
+    if(currentClass == NULL){
         error("Can't use 'this' outside of a class.");
         return;
     }
@@ -672,6 +691,10 @@ static void method(){
     consume(TOKEN_IDENTIFIER,"Expect method name.");
     uint16_t constant = identifierConstant(&parser.previous);
     FunctionType type = TYPE_METHOD;
+    if (parser.previous.length == 4 &&
+    memcmp(parser.previous.start, "init", 4) == 0) {
+    type = TYPE_INITIALIZER;
+    }
     function(type);
     emitByte(OP_METHOD);
     emitBytes((uint8_t)(constant >> 8), (uint8_t)(constant & 0xff));
@@ -684,6 +707,9 @@ static void classDeclaration(){
     emitByte(OP_CLASS);
     emitBytes((uint8_t)(nameConstant >> 8), (uint8_t)(nameConstant & 0xff));
     defineVariable(nameConstant);
+    ClassCompiler classCompiler;
+    classCompiler.enclosing = currentClass;
+    currentClass = &classCompiler;
     namedVariable(name,false);//load variable onto the stack
     consume(TOKEN_LEFT_BRACE,"Expect '{' before class body.");
     while(!check(TOKEN_RIGHT_BRACE)&&!check(TOKEN_EOF)){
@@ -691,6 +717,7 @@ static void classDeclaration(){
     }
     consume(TOKEN_RIGHT_BRACE,"Expect '}' after class body.");
     emitByte(OP_POP);
+    currentClass = currentClass->enclosing;
 }
 
 static void functionDeclaration(){
@@ -837,7 +864,9 @@ static void returnStatement() {
   }
   if (match(TOKEN_SEMICOLON)) {
     emitReturn();
-  } else {
+  } else if(current->type == TYPE_INITIALIZER){
+    error("Can't return a value from an initializer.");
+  }else {
     expression();
     consume(TOKEN_SEMICOLON, "Expect ';' after return value.");
     emitByte(OP_RETURN);

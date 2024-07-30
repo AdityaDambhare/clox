@@ -24,6 +24,7 @@ typedef struct{
     size_t nextGC;
     Obj* objects;
     Table strings;
+    ObjString* initString;
     Table globals;
     ObjUpvalue* openUpvalues;
     int grayCount;

@@ -56,6 +56,8 @@ void initVM(){
     vm.objects = NULL;
     initTable(&vm.strings,64);
     initTable(&vm.globals,64);
+    vm.initString = NULL;//copyString might call the gc which will try to read the string before it is even allocated
+    vm.initString = copyString("init",4);
     vm.bytesAllocated = 0;
     vm.nextGC = 1024*16;
     vm.grayCount = 0;
@@ -67,6 +69,7 @@ void initVM(){
 void freeVM(){
     freeObjects();
     freeTable(&vm.strings);
+    vm.initString = NULL;
     freeTable(&vm.globals);
     free(vm.grayStack);
 }   
@@ -115,6 +118,14 @@ static bool callValue(Value callee, int argCount) {
       case OBJ_CLASS:{
         ObjClass* klass = AS_CLASS(callee);
         vm.stackTop[-argCount - 1] = OBJ_VAL(newInstance(klass));
+        Value initializer;
+        if(tableGet(&klass->methods,vm.initString,&initializer)){
+            return call(AS_CLOSURE(initializer),argCount);
+        }
+        else if(argCount != 0){
+            runtimeError("Expected 0 arguments but got %d.",argCount);
+            return false;
+        }
         return true;
       }
       case OBJ_NATIVE: {
@@ -132,6 +143,29 @@ static bool callValue(Value callee, int argCount) {
   runtimeError("Can only call functions and classes.");
   return false;
 }
+}
+
+static bool invokeFromClass(ObjClass* klass,ObjString* method,int argCount){
+    Value value;
+    if(!tableGet(&klass->methods,method,&value)){
+        runtimeError("Undefined property '%s'.",method->chars);
+        return false;
+    }
+    return call(AS_CLOSURE(value),argCount);
+}
+
+static bool invoke(ObjString* method,int argCount){
+    Value reciever = peek(argCount);
+    if(!IS_INSTANCE(reciever)){
+        runtimeError("Only instances have methods.");
+        return false;
+    }
+    ObjInstance* instance = AS_INSTANCE(reciever);
+    if(tableGet(&instance->fields,method,&reciever)){
+        vm.stackTop[-argCount-1] = reciever;
+        return callValue(reciever,argCount);
+    }
+    return invokeFromClass(instance->klass,method,argCount);
 }
 
 static bool bindMethod(ObjClass* klass, ObjString* name) {
@@ -292,7 +326,8 @@ static void* dispatch_table[] =
   &&CLASS,
   &&GET_MEM,
   &&SET_MEM,
-  &&METHOD
+  &&METHOD,
+  &&INVOKE
   };
     JUMP:
     instruction = READ_BYTE();
@@ -605,7 +640,18 @@ static void* dispatch_table[] =
         defineMethod(AS_STRING(READ_CONSTANT_LONG()));
         goto JUMP;
     }
-    
+    INVOKE:
+    {
+        ObjString* method = AS_STRING(READ_CONSTANT_LONG());
+        int argCount = READ_BYTE();
+        frame->ip = ip;
+        if(!invoke(method,argCount)){
+            return INTERPRET_RUNTIME_ERROR;
+        }
+        frame = &vm.frames[vm.frameCount-1];
+        ip = frame->ip;
+        goto JUMP;
+    }
 #undef BINARY_OP        
 #undef READ_CONSTANT
 #undef READ_SHORT

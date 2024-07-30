@@ -211,6 +211,7 @@ void collectGarbage(){
   printf("-- gc begin\n");
   size_t before = vm.bytesAllocated;
 #endif
+  markObject((Obj*)vm.initString);
   markRoots();
   traceReferences();
   tableRemoveWhite(&vm.strings);
