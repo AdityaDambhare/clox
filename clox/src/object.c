@@ -17,7 +17,7 @@ static Obj* allocateObject(size_t size, ObjType type) {
   object->isMarked = false;
   vm.objects = object;
 #ifdef DEBUG_LOG_GC
-  printf("%p allocate %ld for %d\n", (void*)object, size, type);
+  printf("%p allocate %ld for %d %s\n", (void*)object, size, type,objTypeName(type));
 #endif
   return object;
 }
@@ -154,4 +154,26 @@ void printObject(Value value) {
       printf("upvalue");
       break;
   }
+}
+
+const char* objTypeName(ObjType type){
+  switch(type){
+    case OBJ_BOUND_METHOD:
+      return "BOUND_METHOD";
+    case OBJ_CLASS:
+      return "CLASS";
+    case OBJ_INSTANCE:
+      return "INSTANCE";
+    case OBJ_STRING:
+      return "STRING";
+    case OBJ_FUNCTION:
+      return "FUNCTION";
+    case OBJ_NATIVE:
+      return "NATIVE";
+    case OBJ_CLOSURE:
+      return "CLOSURE";
+    case OBJ_UPVALUE:
+      return "UPVALUE";
+  }
+  return "UNKNOWN";
 }

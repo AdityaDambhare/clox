@@ -28,17 +28,29 @@ static void runtimeError(const char* format, ...) {
   vfprintf(stderr, format, args);
   va_end(args);
   fputs("\n", stderr);
+  int repeated = 0;
+  int lastLine = -1;
+  const char* lastFunctionName = NULL;
    for (int i = vm.frameCount - 1; i >= 0; i--) {
     CallFrame* frame = &vm.frames[i];
     ObjFunction* function = frame->closure->function;
     size_t instruction = frame->ip - function->chunk.code - 1;
-    fprintf(stderr, "[line %d] in ", 
-            getLine(&function->chunk, instruction));
-    if (function->name == NULL) {
-      fprintf(stderr, "script\n");
+    int line  = getLine(&function->chunk,instruction);
+    const char* functionName = function->name == NULL ? "script" : function->name->chars;
+    if ( lastFunctionName&&lastLine == lastLine && strcmp(lastFunctionName,functionName) == 0) {
+      repeated++;
     } else {
-      fprintf(stderr, "%s()\n", function->name->chars);
+      if (repeated > 0) {
+        fprintf(stderr, "[^ line repeated %d  time(s)]\n", repeated);
+        repeated = 0;
+      }
+      fprintf(stderr, "%s() line %d\n", functionName, line);
+      lastLine = line;
+      lastFunctionName = functionName;
     }
+  }
+  if(repeated>0){
+    fprintf(stderr, "[^ line repeated %d  time(s)]\n", repeated);
   }
   resetStack();
 }

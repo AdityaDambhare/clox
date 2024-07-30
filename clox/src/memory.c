@@ -31,7 +31,7 @@ void *reallocate(void *pointer, size_t oldSize, size_t newSize) {
 #define FREE(type,pointer) reallocate(pointer,sizeof(type),0)
 static void freeObject(Obj* object) {
 #ifdef DEBUG_LOG_GC
-  printf("%p free type %d\n", (void*)object, object->type);
+  printf("%p free type %d %s\n", (void*)object, object->type,objTypeName(object->type));
 #endif
   switch (object->type) {
     case OBJ_BOUND_METHOD:

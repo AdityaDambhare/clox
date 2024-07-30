@@ -94,6 +94,9 @@ typedef struct {
   Obj obj;
   NativeFn function;
 } ObjNative;
+
+const char* objTypeName(ObjType type);
+
 ObjClass* newClass(ObjString* name);
 ObjBoundMethod* newBoundMethod(Value receiver, ObjClosure* method);
 ObjInstance* newInstance(ObjClass* klass);
