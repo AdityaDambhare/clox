@@ -58,7 +58,8 @@ typedef enum{
     TYPE_SCRIPT,
     TYPE_METHOD,
     TYPE_INITIALIZER,
-    TYPE_GETTER
+    TYPE_GETTER,
+    TYPE_EXPRESSION
 }FunctionType;
 
 
@@ -209,15 +210,18 @@ static void initCompiler(Compiler* compiler,FunctionType type){
     compiler->upvalues = (Upvalue*)malloc(sizeof(Upvalue)*UINT16_COUNT);
     // implicitly giving the first slot to the vm for internal use
     current = compiler;
-    if(type!=TYPE_SCRIPT){
+    if(type!=TYPE_SCRIPT&&type!=TYPE_EXPRESSION){
         current->function->name = copyString(parser.previous.start,parser.previous.length);
+    }
+    if(type==TYPE_EXPRESSION){
+        current->function->name = copyString("",1);
     }
     Local* local = &current->locals[current->localCount++];
     local->depth = 0;
     local->name.start = "";
     local->name.length = 0;
     local->isCaptured = false;
-    if (type != TYPE_FUNCTION) {
+    if (type != TYPE_FUNCTION&&type!=TYPE_SCRIPT&&type!=TYPE_EXPRESSION) {
     local->name.start = "this";
     local->name.length = 4;
   } else {
@@ -231,8 +235,8 @@ static ObjFunction* endCompiler(){
     ObjFunction* function = current->function;
 #ifdef DEBUG_PRINT_CODE
     if(!parser.hadError){
-        dissassembleChunk(currentChunk(), function->name != NULL
-        ? function->name->chars : "<script>");
+        const char* name = function->name != NULL ? function->name->chars : "<script>";
+        dissassembleChunk(currentChunk(), name);
     }
 #endif
     free(current->locals);
@@ -268,6 +272,7 @@ static void parsePrecedence(Precedence precedence);
 static int resolveLocal(Compiler* compiler,Token* name);
 static uint8_t argumentList();
 static int resolveUpvalue(Compiler* compiler, Token* name);
+static void function(FunctionType type);
 
 static void binary(bool canAssign){
     TokenType operatorType = parser.previous.type;
@@ -474,6 +479,10 @@ static void super_(bool canAssign){
   }
 }
 
+static void functionExpression(bool canAssign){
+    function(TYPE_EXPRESSION);
+}
+
 ParseRule rules[] = {
   [TOKEN_LEFT_PAREN]    = {grouping, call,   PREC_CALL},
   [TOKEN_RIGHT_PAREN]   = {NULL,     NULL,   PREC_NONE},
@@ -505,7 +514,7 @@ ParseRule rules[] = {
   [TOKEN_ELSE]          = {NULL,     NULL,   PREC_NONE},
   [TOKEN_FALSE]         = {literal,     NULL,   PREC_NONE},
   [TOKEN_FOR]           = {NULL,     NULL,   PREC_NONE},
-  [TOKEN_FUN]           = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_FUN]           = {functionExpression,     NULL,   PREC_PRIMARY},
   [TOKEN_IF]            = {NULL,     NULL,   PREC_NONE},
   [TOKEN_NIL]           = {literal,     NULL,   PREC_NONE},
   [TOKEN_OR]            = {NULL,     or_,   PREC_OR},
@@ -772,10 +781,16 @@ static void classDeclaration(){
 }
 
 static void functionDeclaration(){
+    if(check(TOKEN_IDENTIFIER)){
     int global = parseVariable("Expect function name");
     markInitialized();
     function(TYPE_FUNCTION);
     defineVariable(global);
+    }
+    else{
+        function(TYPE_EXPRESSION);
+        emitByte(OP_POP);
+    }
 }
 
 static void varDeclaration() {

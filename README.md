@@ -13,7 +13,7 @@ This is a bytecode interpreter for the toy language lox written in c from the bo
 <ul>
   <li> add lists </li>
   <li> add dictionary </li>
-  <li> add function expressions </li>
+  <li> <s>add function expressions </s></li>
   <li> add getters in class </li>
   <li>Add an optional cache directive for functions and methods</li>
   <li> use inline caches to speed up method and field lookup</li>
