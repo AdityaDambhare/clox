@@ -216,6 +216,7 @@ static void initCompiler(Compiler* compiler,FunctionType type){
     if(type==TYPE_EXPRESSION){
         current->function->name = copyString("",1);
     }
+
     Local* local = &current->locals[current->localCount++];
     local->depth = 0;
     local->name.start = "";
@@ -702,6 +703,10 @@ static void function(FunctionType type){
     Compiler compiler;
     initCompiler(&compiler,type);
     beginScope();
+    if(type==TYPE_GETTER){
+        current->function->arity = -1;//getters have negative arity
+        goto GETTER_LABEL;
+    }
     consume(TOKEN_LEFT_PAREN,"Expect '(' after function name.");
     if (!check(TOKEN_RIGHT_PAREN)) {
         do {
@@ -714,6 +719,7 @@ static void function(FunctionType type){
         } while (match(TOKEN_COMMA));
   }
     consume(TOKEN_RIGHT_PAREN,"Expect ')' after parameters.");
+    GETTER_LABEL: //forgive me, the intrusive thoughts have won
     consume(TOKEN_LEFT_BRACE,"Expect '{' before function body.");
     block();
     ObjFunction* function = endCompiler();
@@ -734,6 +740,9 @@ static void method(){
     consume(TOKEN_IDENTIFIER,"Expect method name.");
     uint16_t constant = identifierConstant(&parser.previous);
     FunctionType type = TYPE_METHOD;
+    if(!check(TOKEN_LEFT_PAREN)){
+        type = TYPE_GETTER;
+    }
     if (parser.previous.length == 4 &&
     memcmp(parser.previous.start, "init", 4) == 0) {
     type = TYPE_INITIALIZER;

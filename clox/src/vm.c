@@ -103,15 +103,19 @@ static Value peek(int distance) {
 }
 
 static bool call(ObjClosure* closure, int argCount) {
-  if(argCount != closure->function->arity) {
+  if(closure->function->arity>=0&&argCount != closure->function->arity) {
     runtimeError("Expected %d arguments but got %d.",
         closure->function->arity, argCount);
+    return false;
+  }
+  if(closure->function->arity<0&&argCount !=0){
+    runtimeError("Expected 0 arguments for getter method but got %d.",argCount);
     return false;
   }
   if (vm.frameCount == FRAMES_MAX) {
     runtimeError("Stack overflow.");
     return false;
-  }
+  } 
   CallFrame* frame = &vm.frames[vm.frameCount++];
   frame->closure = closure;
   frame->ip = closure->function->chunk.code;
@@ -186,9 +190,10 @@ static bool bindMethod(ObjClass* klass, ObjString* name) {
     runtimeError("Undefined property '%s'.", name->chars);
     return false;
   }
-
+  
   ObjBoundMethod* bound = newBoundMethod(peek(0),
                                          AS_CLOSURE(method));
+  
   pop();
   push(OBJ_VAL(bound));
   return true;
@@ -632,6 +637,14 @@ static void* dispatch_table[] =
         if(!bindMethod(instance->klass, name)) {
           return INTERPRET_RUNTIME_ERROR;
         }
+        if(IS_BOUND_METHOD(peek(0))&&AS_BOUND_METHOD(peek(0))->method->function->arity<0){
+            frame->ip = ip;
+            if(!callValue(peek(0),0)){
+                return INTERPRET_RUNTIME_ERROR;
+            }
+            frame = &vm.frames[vm.frameCount-1];
+            ip = frame->ip;
+        }
         goto JUMP;
     }
     SET_MEM:
@@ -687,6 +700,7 @@ static void* dispatch_table[] =
         if(!bindMethod(superclass,name)){
             return INTERPRET_RUNTIME_ERROR;
         }
+        ip = frame->ip;
         goto JUMP;
     }
     SUPER_INVOKE:{

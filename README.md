@@ -14,7 +14,7 @@ This is a bytecode interpreter for the toy language lox written in c from the bo
   <li> add lists </li>
   <li> add dictionary </li>
   <li> <s>add function expressions </s></li>
-  <li> add getters in class </li>
+  <li><s> add getters in class </s></li>
   <li>Add an optional cache directive for functions and methods</li>
   <li> use inline caches to speed up method and field lookup</li>
   <li> create a standard library or a c-api </li>

@@ -168,9 +168,9 @@ int dissassembleInstruction(Chunk* chunk, int offset) {
   SET_GLOBAL_LONG:
     return constantInstructionLong("OP_SET_GLOBAL_LONG",chunk,offset);
   GET_LOCAL:
-    return constantInstructionLong("OP_GET_LOCAL",chunk,offset);
+    return byteInstructionLong("OP_GET_LOCAL",chunk,offset);
   SET_LOCAL:
-    return constantInstructionLong("OP_SET_LOCAL",chunk,offset);
+    return byteInstructionLong("OP_SET_LOCAL",chunk,offset);
   JUMP:
     return jumpInstruction("OP_JUMP", 1, chunk, offset);
   JUMP_IF_FALSE:
