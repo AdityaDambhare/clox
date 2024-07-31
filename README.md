@@ -21,3 +21,16 @@ This is a bytecode interpreter for the toy language lox written in c from the bo
   <li> work on a jit implementation if possible </li>
 </ul>
 
+<h3> How to build and run </h3>
+
+run make
+```
+make
+```
+
+this will generate object files in /obj folder and the final executable in /bin
+
+run using
+```
+bin/clox
+```
