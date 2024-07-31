@@ -638,7 +638,6 @@ static void* dispatch_table[] =
           return INTERPRET_RUNTIME_ERROR;
         }
         if(IS_BOUND_METHOD(peek(0))&&AS_BOUND_METHOD(peek(0))->method->function->arity<0){
-            frame->ip = ip;
             if(!callValue(peek(0),0)){
                 return INTERPRET_RUNTIME_ERROR;
             }
@@ -700,7 +699,13 @@ static void* dispatch_table[] =
         if(!bindMethod(superclass,name)){
             return INTERPRET_RUNTIME_ERROR;
         }
-        ip = frame->ip;
+        if(IS_BOUND_METHOD(peek(0))&&AS_BOUND_METHOD(peek(0))->method->function->arity<0){
+            if(!callValue(peek(0),0)){
+                return INTERPRET_RUNTIME_ERROR;
+            }
+            frame = &vm.frames[vm.frameCount-1];
+            ip = frame->ip;
+        }
         goto JUMP;
     }
     SUPER_INVOKE:{
