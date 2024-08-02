@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <string.h>
-
+#include <stdlib.h>
 #include "memory.h"
 #include "object.h"
 #include "value.h"
@@ -68,6 +68,12 @@ ObjNative* newNative(NativeFn function) {
   ObjNative* native = ALLOCATE_OBJ(ObjNative, OBJ_NATIVE);
   native->function = function;
   return native;
+}
+
+ObjList* newList(){
+  ObjList* list = ALLOCATE_OBJ(ObjList,OBJ_LIST);
+  initValueArray(&list->objects);
+  return list;
 }
 
 static ObjString* allocateString(char* chars, int length,uint32_t hash) {
@@ -153,6 +159,9 @@ void printObject(Value value) {
      case OBJ_UPVALUE:
       printf("upvalue");
       break;
+    case OBJ_LIST:
+      printf("<list : %u>",((ObjList*)AS_OBJ(value))->objects.count);
+      break;
   }
 }
 
@@ -174,6 +183,8 @@ const char* objTypeName(ObjType type){
       return "CLOSURE";
     case OBJ_UPVALUE:
       return "UPVALUE";
+    case OBJ_LIST:
+      return "LIST";
   }
   return "UNKNOWN";
 }

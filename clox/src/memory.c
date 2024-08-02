@@ -71,6 +71,12 @@ static void freeObject(Obj* object) {
     case OBJ_UPVALUE:
       FREE(ObjUpvalue, object);
       break;
+    case OBJ_LIST:{
+      ObjList* list = (ObjList*)object;
+      freeValueArray(&list->objects);
+      FREE(ObjList,object);
+      break;
+    }
   }
 }
 
@@ -143,6 +149,11 @@ static void blackenObject(Obj* object){
     markObject((Obj*)function->name);
     markArray(&function->chunk.constants);
     break;
+    case OBJ_LIST:{
+      ObjList* list = (ObjList*)object;
+      markArray(&list->objects);
+      break;
+    }
     case OBJ_UPVALUE:
     markValue(((ObjUpvalue*)object)->closed);
     break;

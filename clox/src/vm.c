@@ -16,6 +16,19 @@ static Value clockNative(int argCount, Value* args) {
   return NUMBER_VAL((double)clock() / CLOCKS_PER_SEC);
 }
 
+static Value lenNative(int argCount,Value* args){
+    if(argCount==0||!IS_LIST(args[0])){
+        return NIL_VAL;
+    }
+    ObjList* list = AS_LIST(args[0]);
+    return NUMBER_VAL(list->objects.count);
+}
+
+static Value gcNative(int argCount,Value* args){
+    collectGarbage();
+    return NIL_VAL;
+}
+
 static void resetStack(){
     vm.frameCount = 0;
     vm.stackTop = vm.stack;
@@ -55,12 +68,20 @@ static void runtimeError(const char* format, ...) {
   resetStack();
 }
 
+
+
 static void defineNative(const char* name, NativeFn function) {
   push(OBJ_VAL(copyString(name, (int)strlen(name))));
   push(OBJ_VAL(newNative(function)));
   tableSet(&vm.globals, AS_STRING(vm.stack[0]), vm.stack[1]);
   pop();
   pop();
+}
+
+static void defineNatives(){
+    defineNative("len",lenNative);
+    defineNative("clock",clockNative);
+    defineNative("gc",gcNative);
 }
 
 void initVM(){
@@ -75,7 +96,7 @@ void initVM(){
     vm.grayCount = 0;
     vm.grayCapacity = 0;
     vm.grayStack = NULL;
-    defineNative("clock", clockNative);
+    defineNatives();
 }
 
 void freeVM(){
@@ -347,7 +368,10 @@ static void* dispatch_table[] =
   &&INVOKE,
   &&INHERIT,
   &&SUPER_GET,
-  &&SUPER_INVOKE
+  &&SUPER_INVOKE,
+  &&MAKE_LIST,
+  &&GET_ELEMENT,
+  &&SET_ELEMENT
   };
     JUMP:
     instruction = READ_BYTE();
@@ -717,6 +741,63 @@ static void* dispatch_table[] =
         }
         frame = &vm.frames[vm.frameCount-1];
         ip = frame->ip;
+        goto JUMP;
+    }
+    MAKE_LIST:{
+        int length = READ_SHORT();
+        ObjList* list = newList();
+        push(OBJ_VAL(list));
+        for(int i =0;i<length;i++){
+            writeValueArray(&list->objects,peek(length-i));
+        }
+        for(int i =0;i<=length;i++){
+            pop();
+        }
+        push(OBJ_VAL(list));
+        goto JUMP;
+    }
+    GET_ELEMENT:{
+        if(!IS_NUMBER(peek(0))){
+            frame->ip = ip;
+            runtimeError("Index must be a number.");
+            return INTERPRET_RUNTIME_ERROR;
+        }
+        int index = AS_NUMBER(pop());
+        if(!IS_LIST(peek(0))){
+            frame->ip = ip;
+            runtimeError("Only lists have elements.");
+            return INTERPRET_RUNTIME_ERROR;
+        }
+        ObjList* list = AS_LIST(pop());
+        if(index<0||index>=list->objects.count){
+            frame->ip = ip;
+            runtimeError("Index out of bounds.");
+            return INTERPRET_RUNTIME_ERROR;
+        }
+        push(list->objects.values[index]);
+        goto JUMP;
+    }
+    SET_ELEMENT:{
+        if(!IS_NUMBER(peek(1))){
+            frame->ip = ip;
+            runtimeError("Index must be a number.");
+            return INTERPRET_RUNTIME_ERROR;
+        }
+        int index = AS_NUMBER(peek(1));
+        if(!IS_LIST(peek(2))){
+            frame->ip = ip;
+            runtimeError("Only lists have elements.");
+            return INTERPRET_RUNTIME_ERROR;
+        }
+        ObjList* list = AS_LIST(peek(2));
+        if(index<0||index>=list->objects.count){
+            frame->ip = ip;
+            runtimeError("Index out of bounds.");
+            return INTERPRET_RUNTIME_ERROR;
+        }
+        list->objects.values[index] = peek(0);
+        pop();
+        pop();
         goto JUMP;
     }
 #undef BINARY_OP        

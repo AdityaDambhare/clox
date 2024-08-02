@@ -8,7 +8,7 @@ typedef enum {
   VAL_BOOL,
   VAL_NIL, 
   VAL_NUMBER,
-  VAL_OBJ
+  VAL_OBJ,
 } ValueType;
 #ifdef NAN_BOXING
 typedef uint64_t Value;

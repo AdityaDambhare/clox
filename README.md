@@ -8,10 +8,12 @@ This is a bytecode interpreter for the toy language lox written in c from the bo
   <li> increased the max stack frames allowed from 256 to 1024 </li>
   <li> made some changes to runtime error reporting and gc debugging </li>
   <li> added break and continue statements for loops </li>
+  <li> strings and numbers can be added </li>
+  <li> added lists </li>
 </ul>
 <h3> todo (increasing in difficulty)</h3>
 <ul>
-  <li> add lists </li>
+  <li><s> add lists </s></li>
   <li> add dictionary </li>
   <li> <s>add function expressions </s></li>
   <li><s> add getters in class </s></li>

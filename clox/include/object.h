@@ -8,9 +8,11 @@
 #define OBJ_TYPE(value) (AS_OBJ(value)->type)
 #define IS_STRING(value)       isObjType(value, OBJ_STRING) 
 #define IS_NATIVE(value)       isObjType(value, OBJ_NATIVE)
+#define IS_LIST(value)         isObjType(value,OBJ_LIST)
 #define AS_STRING(value)       ((ObjString*)AS_OBJ(value))
 #define AS_CSTRING(value)      (((ObjString*)AS_OBJ(value))->chars)
 #define IS_CLOSURE(value)      isObjType(value, OBJ_CLOSURE)
+#define AS_LIST(value)         ((ObjList*)AS_OBJ(value))
 #define IS_CLASS(value)        isObjType(value, OBJ_CLASS)  
 #define AS_CLASS(value)        ((ObjClass*)AS_OBJ(value))
 #define IS_BOUND_METHOD(value) isObjType(value,OBJ_BOUND_METHOD)
@@ -30,7 +32,8 @@ typedef enum{
     OBJ_UPVALUE,
     OBJ_BOUND_METHOD,
     OBJ_CLASS,
-    OBJ_INSTANCE
+    OBJ_INSTANCE,
+    OBJ_LIST
 }ObjType;
 
 struct Obj{
@@ -88,6 +91,11 @@ typedef struct {
   ObjClosure* method;
 } ObjBoundMethod;
 
+typedef struct{
+    Obj obj;
+    ValueArray objects;
+}ObjList;
+
 typedef Value (*NativeFn)(int argCount, Value* args);
 
 typedef struct {
@@ -106,6 +114,7 @@ ObjNative* newNative(NativeFn function);
 ObjString* takeString(char* chars, int length);
 ObjString* copyString(const char* chars, int length);  
 ObjUpvalue* newUpvalue(Value* slot); 
+ObjList* newList();
 void printObject(Value value);
 static inline bool isObjType(Value value, ObjType type) {
   return IS_OBJ(value) && AS_OBJ(value)->type == type;

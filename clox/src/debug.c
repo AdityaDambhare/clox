@@ -109,7 +109,10 @@ int dissassembleInstruction(Chunk* chunk, int offset) {
   &&INVOKE,
   &&INHERIT,
   &&SUPER_GET,
-  &&SUPER_INVOKE
+  &&SUPER_INVOKE,
+  &&MAKE_LIST,
+  &&GET_ELEMENT,
+  &&SET_ELEMENT
   };
 
   uint8_t instruction = chunk->code[offset];
@@ -232,4 +235,10 @@ int dissassembleInstruction(Chunk* chunk, int offset) {
       printf("'\n");
       return offset;
     }
+  MAKE_LIST:
+    return byteInstructionLong("OP_MAKE_LIST", chunk, offset);
+  GET_ELEMENT:
+    return simpleInstruction("OP_GET_ELEMENT", offset);
+  SET_ELEMENT:
+    return simpleInstruction("OP_SET_ELEMENT", offset);
 }

@@ -32,7 +32,7 @@ PREC_TERM,        // + -
 PREC_FACTOR,      // * /
 PREC_UNARY,       // ! -
 PREC_POWER,       // ^
-PREC_CALL,        // . ()
+PREC_CALL,        // . () []
 PREC_PRIMARY
 } Precedence;
 typedef void (*ParseFn)(bool canAssign);
@@ -484,9 +484,37 @@ static void functionExpression(bool canAssign){
     function(TYPE_EXPRESSION);
 }
 
+static void list(bool canAssign){
+    uint16_t length = 0;
+    while(!check(TOKEN_RIGHT_SQUARE)){
+        parsePrecedence(PREC_ASSIGNMENT);
+        if(length++>=UINT16_COUNT){
+            error("Too many elements in list.");
+        }
+        if(!match(TOKEN_COMMA)) break;
+    }
+    consume(TOKEN_RIGHT_SQUARE,"Expect ']' after list declaration.");
+    emitByte(OP_MAKE_LIST);
+    emitBytes((uint8_t)(length >> 8), (uint8_t)(length & 0xff));
+}
+
+static void subscript(bool canAssign){
+    expression();
+    consume(TOKEN_RIGHT_SQUARE,"Expect ']' after subscript.");
+    if(canAssign&&match(TOKEN_EQUAL)){
+        expression();
+        emitByte(OP_SET_ELEMENT);
+    }
+    else{
+        emitByte(OP_GET_ELEMENT);
+    }
+}
+
 ParseRule rules[] = {
   [TOKEN_LEFT_PAREN]    = {grouping, call,   PREC_CALL},
   [TOKEN_RIGHT_PAREN]   = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_LEFT_SQUARE]   = {list,     subscript,   PREC_CALL},
+  [TOKEN_RIGHT_SQUARE]  = {NULL,     NULL,   PREC_NONE},
   [TOKEN_LEFT_BRACE]    = {NULL,     NULL,   PREC_NONE}, 
   [TOKEN_RIGHT_BRACE]   = {NULL,     NULL,   PREC_NONE},
   [TOKEN_COMMA]         = {NULL,     comma,   PREC_COMMA},
