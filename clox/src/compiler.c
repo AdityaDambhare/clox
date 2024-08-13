@@ -513,10 +513,10 @@ static void subscript(bool canAssign){
 ParseRule rules[] = {
   [TOKEN_LEFT_PAREN]    = {grouping, call,   PREC_CALL},
   [TOKEN_RIGHT_PAREN]   = {NULL,     NULL,   PREC_NONE},
-  [TOKEN_LEFT_SQUARE]   = {list,     subscript,   PREC_CALL},
-  [TOKEN_RIGHT_SQUARE]  = {NULL,     NULL,   PREC_NONE},
   [TOKEN_LEFT_BRACE]    = {NULL,     NULL,   PREC_NONE}, 
   [TOKEN_RIGHT_BRACE]   = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_LEFT_SQUARE]   = {list,     subscript,   PREC_CALL},
+  [TOKEN_RIGHT_SQUARE]  = {NULL,     NULL,   PREC_NONE},
   [TOKEN_COMMA]         = {NULL,     comma,   PREC_COMMA},
   [TOKEN_DOT]           = {NULL,     dot,   PREC_CALL},
   [TOKEN_MINUS]         = {unary,    binary, PREC_TERM},
@@ -543,19 +543,21 @@ ParseRule rules[] = {
   [TOKEN_ELSE]          = {NULL,     NULL,   PREC_NONE},
   [TOKEN_FALSE]         = {literal,     NULL,   PREC_NONE},
   [TOKEN_FOR]           = {NULL,     NULL,   PREC_NONE},
-  [TOKEN_FUN]           = {functionExpression,     NULL,   PREC_PRIMARY},
+  [TOKEN_FUN]           = {functionExpression,     NULL,   PREC_NONE},
   [TOKEN_IF]            = {NULL,     NULL,   PREC_NONE},
-  [TOKEN_NIL]           = {literal,     NULL,   PREC_NONE},
+  [TOKEN_NIL]           = {literal,  NULL,   PREC_NONE},
   [TOKEN_OR]            = {NULL,     or_,   PREC_OR},
   [TOKEN_PRINT]         = {NULL,     NULL,   PREC_NONE},
   [TOKEN_RETURN]        = {NULL,     NULL,   PREC_NONE},
-  [TOKEN_SUPER]         = {super_,     NULL,   PREC_NONE},
-  [TOKEN_THIS]          = {this_,     NULL,   PREC_NONE},
-  [TOKEN_TRUE]          = {literal,     NULL,   PREC_NONE},
+  [TOKEN_SUPER]         = {super_,   NULL,   PREC_NONE},
+  [TOKEN_THIS]          = {this_,    NULL,   PREC_NONE},
+  [TOKEN_TRUE]          = {literal,  NULL,   PREC_NONE},
   [TOKEN_VAR]           = {NULL,     NULL,   PREC_NONE},
   [TOKEN_WHILE]         = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_BREAK]         = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_CONTINUE]      = {NULL,     NULL,   PREC_NONE},
   [TOKEN_ERROR]         = {NULL,     NULL,   PREC_NONE},
-  [TOKEN_EOF]           = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_EOF]           = {NULL,     NULL,   PREC_NONE}
 };
 
 static void parsePrecedence(Precedence precedence){
@@ -700,7 +702,7 @@ static uint8_t argumentList() {
   uint8_t argCount = 0;
   if (!check(TOKEN_RIGHT_PAREN)) {
     do {
-      parsePrecedence(PREC_ASSIGNMENT);//don't want comma operator to mess with parsing arguments
+      parsePrecedence(PREC_TERNARY);//don't want comma operator to mess with parsing arguments
       if (argCount == 255) {
         error("Can't have more than 255 arguments.");
       }
@@ -834,7 +836,7 @@ static void varDeclaration() {
   int global = parseVariable("Expect variable name.");
 
   if (match(TOKEN_EQUAL)) {
-    parsePrecedence(PREC_ASSIGNMENT);
+    expression();
   } else {
     emitByte(OP_NIL);
   }
