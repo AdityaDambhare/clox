@@ -278,6 +278,9 @@ static void function(FunctionType type);
 static void binary(bool canAssign){
     TokenType operatorType = parser.previous.type;
     ParseRule* rule = getRule(operatorType);
+    operatorType==TOKEN_POWER?
+    parsePrecedence((Precedence)(rule->precedence))
+    :
     parsePrecedence((Precedence)(rule->precedence+1));
     switch (operatorType)
     {
