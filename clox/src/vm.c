@@ -146,7 +146,6 @@ static bool call(ObjClosure* closure, int argCount) {
 
 static bool callValue(Value callee, int argCount) {
   if (IS_OBJ(callee)) {
-    printf("is obj");
     switch (OBJ_TYPE(callee)) {
       case OBJ_BOUND_METHOD: {
         ObjBoundMethod* bound = AS_BOUND_METHOD(callee);
