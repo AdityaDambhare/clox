@@ -58,16 +58,34 @@ static void runFile(const char* path) {
 
 
 int main(int argc, const char* argv[]) {
+  bool traceJson = false;
+  const char* filePath = NULL;
+
+  for (int i = 1; i < argc; i++) {
+    if (strcmp(argv[i], "--trace-json") == 0) {
+      traceJson = true;
+    } else if (argv[i][0] == '-') {
+      fprintf(stderr, "Unknown option: %s\n", argv[i]);
+      exit(64);
+    } else {
+      if (filePath != NULL) {
+        fprintf(stderr, "Usage: clox [--trace-json] [path]\n");
+        exit(64);
+      }
+      filePath = argv[i];
+    }
+  }
+
   initVM();
-  if(argc==1){
+  vm.traceJson = traceJson;
+  if (traceJson) {
+    vm.traceOut = stdout;
+  }
+
+  if (filePath == NULL) {
     repl();
-  }
-  else if(argc==2){
-    runFile(argv[1]);
-  }
-  else{
-    fprintf(stderr,"Usage: clox [path]\n");
-    exit(64);
+  } else {
+    runFile(filePath);
   }
   freeVM();
   return 0;

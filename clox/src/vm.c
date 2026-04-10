@@ -10,11 +10,13 @@
 #include "compiler.h"
 #include "object.h"
 #include "memory.h"
+#include "trace.h"
 VM vm;
 
 static Value clockNative(int argCount, Value* args) {
   return NUMBER_VAL((double)clock() / CLOCKS_PER_SEC);
 }
+
 
 static void resetStack(){
     vm.frameCount = 0;
@@ -28,6 +30,16 @@ static void runtimeError(const char* format, ...) {
   vfprintf(stderr, format, args);
   va_end(args);
   fputs("\n", stderr);
+
+  if (vm.traceJson) {
+    // Format the error message for tracing
+    char msg[1024];
+    va_start(args, format);
+    vsnprintf(msg, sizeof(msg), format, args);
+    va_end(args);
+    traceError(vm.traceOut, msg);
+  }
+
   int repeated = 0;
   int lastLine = -1;
   const char* lastFunctionName = NULL;
@@ -304,6 +316,8 @@ static InterpretResult run() {
     }\
     while(0)\
 
+
+
     register uint8_t instruction;
 static void* dispatch_table[] = 
   {&&RETURN,
@@ -350,6 +364,10 @@ static void* dispatch_table[] =
   &&SUPER_INVOKE
   };
     JUMP:
+    if (vm.traceJson) {
+      int traceIp = (int)(ip - frame->closure->function->chunk.code);
+      traceStep(vm.traceOut, traceIp, *(ip));
+    }
     instruction = READ_BYTE();
 
 
@@ -375,6 +393,9 @@ static void* dispatch_table[] =
         vm.frameCount--;
         if (vm.frameCount == 0) {
             pop();
+            if (vm.traceJson) {
+              traceDone(vm.traceOut);
+            }
           return INTERPRET_OK;
         }
         vm.stackTop = frame->slots;
@@ -466,8 +487,12 @@ static void* dispatch_table[] =
     POP:
         pop();goto JUMP;
     PRINT:
-        printValue(pop());
+        Value val = pop();
+        printValue(val);
         printf("\n");
+        if (vm.traceJson) {
+          traceOutput(vm.traceOut, val);
+        }
         goto JUMP;
     DEFINE_GLOBAL:
         {
@@ -735,5 +760,8 @@ InterpretResult interpret(const char* source){
     pop();
     push(OBJ_VAL(closure));
     call(closure, 0);
+    if (vm.traceJson) {
+      traceInit(vm.traceOut, function);
+    }
     return run();
 }

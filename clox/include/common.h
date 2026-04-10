@@ -6,7 +6,7 @@
 //#define NAN_BOXING
 //#define DEBUG_TRACE_EXECUTION
 #define DEBUG_TRACEX_JSON
-#define DEBUG_PRINT_CODE   
+//#define DEBUG_PRINT_CODE   
 //#define DUMP_PROGRAM_OUTPUT
 //#define DEBUG_STRESS_GC
 //#define DEBUG_LOG_GC

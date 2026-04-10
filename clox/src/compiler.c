@@ -723,6 +723,7 @@ static void function(FunctionType type){
     consume(TOKEN_LEFT_BRACE,"Expect '{' before function body.");
     block();
     ObjFunction* function = endCompiler();
+    
     int func = addConstant(currentChunk(),OBJ_VAL(function)); // you don't know just HOW important the order of these two lines is
     emitByte(OP_CLOSURE);//with DEBUG_STRESS_GC enabled, emitByte() will call the gc, free the function and the function will be deallocated before it is added to the constants array
     //i spent 2 hours trying to find the line causing this bug

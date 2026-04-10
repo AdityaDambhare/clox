@@ -27,14 +27,12 @@ static void jsonStr(FILE* out, const char* s, int len) {
     fputc('"', out);
 }
 
-/* Write a clox Value as a JSON object: {"k":"num","v":1.5}  etc. */
 static void jsonValue(FILE* out, Value val) {
     if (IS_NIL(val)) {
         fputs("{\"k\":\"nil\",\"v\":null}", out);
     } else if (IS_BOOL(val)) {
         fprintf(out, "{\"k\":\"bool\",\"v\":%s}", AS_BOOL(val) ? "true" : "false");
     } else if (IS_NUMBER(val)) {
-        /* Use %.14g so integers print without a trailing dot */
         fprintf(out, "{\"k\":\"num\",\"v\":%.14g}", AS_NUMBER(val));
     } else if (IS_OBJ(val)) {
         switch (OBJ_TYPE(val)) {
@@ -78,27 +76,7 @@ static void jsonValue(FILE* out, Value val) {
                 fputs("{\"k\":\"native\",\"v\":\"<native fn>\"}", out);
                 break;
             }
-            /* Aditya's list extension — guard with #ifdef in case it differs */
-#ifdef OBJ_LIST
-            case OBJ_LIST: {
-                ObjList* list = AS_LIST(val);
-                fputs("{\"k\":\"list\",\"v\":\"[", out);
-                for (int i = 0; i < list->count; i++) {
-                    if (i) fputs(", ", out);
-                    /* simple repr — avoid full recursion for nested lists */
-                    if (IS_NUMBER(list->items[i]))
-                        fprintf(out, "%.14g", AS_NUMBER(list->items[i]));
-                    else if (IS_NIL(list->items[i]))
-                        fputs("nil", out);
-                    else if (IS_BOOL(list->items[i]))
-                        fputs(AS_BOOL(list->items[i]) ? "true":"false", out);
-                    else
-                        fputs("...", out);
-                }
-                fputs("]\"}", out);
-                break;
-            }
-#endif
+
             default:
                 fputs("{\"k\":\"obj\",\"v\":\"<object>\"}", out);
                 break;
@@ -149,17 +127,9 @@ static const char* opcodeName(uint8_t op) {
         case OP_INHERIT:        return "OP_INHERIT";
         case OP_METHOD:         return "OP_METHOD";
 
-#ifdef OP_POWER
-        case OP_POWER:          return "OP_POWER";
-#endif
-#ifdef OP_INDEX_GET
-        case OP_INDEX_GET:      return "OP_INDEX_GET";
-        case OP_INDEX_SET:      return "OP_INDEX_SET";
-        case OP_BUILD_LIST:     return "OP_BUILD_LIST";
-#endif
         default: {
             static char buf[16];
-            snprintf(buf, sizeof(buf), "OP_%d", op);
+            snprintf(buf, sizeof(buf), "%x", op);
             return buf;
         }
     }
@@ -167,11 +137,10 @@ static const char* opcodeName(uint8_t op) {
 
 /* ── public API ───────────────────────────────────────────── */
 
-void traceInit(FILE* out, Chunk* chunk) {
-    /* {"type":"init","bytecode":[...],"constants":[...],"lines":[...]} */
-    fputs("{\"type\":\"init\",", out);
+void traceInit(FILE* out, ObjFunction* function) {
+    Chunk* chunk = &(function->chunk);
+    fputs("{\"type\": \"init\" ,", out);
 
-    /* bytecode — raw byte array */
     fputs("\"bytecode\":[", out);
     for (int i = 0; i < chunk->count; i++) {
         if (i) fputc(',', out);
@@ -189,17 +158,25 @@ void traceInit(FILE* out, Chunk* chunk) {
 
     /* source lines (parallel to bytecode) */
     fputs("\"lines\":[", out);
+    int lstart = 0;
+    int linecount = chunk->lineCount;
+    int currline = 1;
     for (int i = 0; i < chunk->count; i++) {
         if (i) fputc(',', out);
-        fprintf(out, "%d", chunk->lines[i]);
+        int k = 0;
+        while(chunk->lines[k].offset<i){
+            k++;
+        }
+        if(chunk->lines[k].offset==i){
+            k++;
+        }
+        fprintf(out, "%d", chunk->lines[k-1].line);
     }
     fputs("]}\n", out);
     fflush(out);
 }
 
 void traceStep(FILE* out, int ip, uint8_t nextOp) {
-    /* Emit state BEFORE the instruction executes so the UI can
-       highlight it and show the inputs on the stack. */
 
     fprintf(out, "{\"type\":\"step\",\"ip\":%d,\"op\":\"%s\",",
             ip, opcodeName(nextOp));

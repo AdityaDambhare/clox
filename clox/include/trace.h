@@ -18,9 +18,9 @@
 #include <stdbool.h>
 #include "chunk.h"
 #include "value.h"
+#include "object.h"
 
-
-void traceInit(FILE* out, Chunk* chunk);
+void traceInit(FILE* out, ObjFunction* function);
 
 
 void traceStep(FILE* out, int ip, uint8_t nextOp);

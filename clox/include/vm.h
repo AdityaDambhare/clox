@@ -6,6 +6,7 @@
 #include "value.h"
 #include "table.h"
 #include "object.h"
+#include <stdio.h>
 
 typedef struct {
   ObjClosure* closure;
@@ -30,6 +31,8 @@ typedef struct{
     int grayCount;
     int grayCapacity;
     Obj** grayStack;
+    FILE* traceOut;
+    bool traceJson;
 }VM;
 
 typedef enum{
