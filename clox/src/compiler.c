@@ -7,6 +7,8 @@
 #include "chunk.h"
 #include "object.h"
 #include "memory.h"
+#include "trace.h"
+#include "vm.h"
 #define UINT16_COUNT UINT16_MAX+1
 #define UINT8_COUNT UINT8_MAX+1
 #ifdef DEBUG_PRINT_CODE
@@ -106,6 +108,9 @@ static void errorAt(Token* token,const char* message){
     }
     fprintf(stderr,": %s\n",message);
     parser.hadError = true;
+    if(vm.traceJson){
+    traceError(vm.traceOut,message);
+    }
 }
 
 static void errorAtCurrent(const char* message){
